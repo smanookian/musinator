@@ -136,6 +136,8 @@ pub struct App {
     pub lyrics_lookup: Option<Instant>,
     /// Full-screen lyrics view is open.
     pub lyrics_full: bool,
+    /// Mini mode chosen with the key (it also turns on by itself in small windows).
+    pub mini: bool,
     big: Option<biglyric::BigLyrics>,
     /// Big lyric pictures asked for / ready (small, newest last).
     pub big_pics: Vec<(biglyric::Key, Option<Protocol>)>,
@@ -745,6 +747,7 @@ impl App {
                 self.lyrics_lookup = Some(Instant::now());
                 self.worker.send(Job::FetchLyrics { track: t, next_to_song: self.cfg.save_lyrics_next });
             }
+            Action::MiniMode => self.mini = !self.mini,
             Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
             Action::LyricsEarlier | Action::LyricsLater => {
@@ -1371,6 +1374,7 @@ pub fn run(cfg: Config) -> Result<()> {
         sleep: None,
         lyrics_lookup: None,
         lyrics_full: false,
+        mini: false,
         big,
         big_pics: Vec::new(),
         big_asked: Vec::new(),

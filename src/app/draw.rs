@@ -137,8 +137,19 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     f.buffer_mut().set_style(area, Style::default().fg(c(app.theme.fg)));
     app.hit = Hits::default();
     app.viz_area = Rect::default();
-    if area.height < 6 || area.width < 30 {
+    if area.width < 20 || area.height < 3 {
         put(f.buffer_mut(), 0, 0, "Window too small", area.width, Style::default().fg(c(app.theme.muted)));
+        return;
+    }
+    // Mini mode: chosen with `m`, or when the window is too small for the screens.
+    if app.mini || area.height < 12 || area.width < 60 {
+        mini(f, app, area);
+        if let Some(mut d) = app.dialog.take() {
+            d.draw(f, app);
+            if app.dialog.is_none() {
+                app.dialog = Some(d);
+            }
+        }
         return;
     }
     let main = Rect { height: area.height - 1, ..area };
@@ -1079,4 +1090,68 @@ fn put_words(buf: &mut Buffer, x: u16, y: u16, words: &[String], sung: usize, ma
 
 fn words_width(words: &[String]) -> u16 {
     (words.iter().map(|w| w.width()).sum::<usize>() + words.len().saturating_sub(1)) as u16
+}
+
+// ---------------- mini mode ----------------
+
+/// Three lines: title / artist, progress, controls + time. Bordered when there is room.
+fn mini(f: &mut Frame, app: &mut App, area: Rect) {
+    let t = app.theme.clone();
+    let inner = if area.height >= 5 {
+        let kind = if app.cfg.corners == "square" { BorderType::Plain } else { BorderType::Rounded };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(kind)
+            .border_style(Style::default().fg(c(t.border)).bg(c(t.bg)))
+            .style(Style::default().bg(c(t.bg)));
+        let r = Rect { height: 5, ..area };
+        let i = block.inner(r);
+        f.render_widget(block, r);
+        Rect { x: i.x + 1, width: i.width.saturating_sub(2), ..i }
+    } else {
+        Rect { height: 3.min(area.height), ..area }
+    };
+    let snap = app.now();
+    let buf = f.buffer_mut();
+    let right = inner.x + inner.width;
+    let Some(track) = snap.track.clone() else {
+        put(buf, inner.x, inner.y, "♪ Nothing playing", inner.width, Style::default().fg(c(t.muted)));
+        if inner.height >= 3 {
+            put(buf, inner.x, inner.y + 2, "/ search · m full view", inner.width, Style::default().fg(c(t.muted)));
+        }
+        return;
+    };
+    let artist = track.display_artist().to_string();
+    let aw = (artist.width() as u16).min(inner.width / 2);
+    let ax = put_right(buf, right, inner.y, &artist, aw, Style::default().fg(c(t.muted)));
+    put(
+        buf,
+        inner.x,
+        inner.y,
+        &format!("♪ {}", track.display_title()),
+        ax.saturating_sub(inner.x + 1),
+        Style::default().fg(c(t.accent)).add_modifier(Modifier::BOLD),
+    );
+    if inner.height < 3 {
+        return;
+    }
+    // Progress bar only (times go on the last line, like the mockup).
+    let pos = app.engine.position().as_millis() as u64;
+    let len = track.duration_ms.unwrap_or(0);
+    let bar = Rect { y: inner.y + 1, height: 1, ..inner };
+    app.hit.progress = bar;
+    let frac = if len > 0 { (pos as f64 / len as f64).clamp(0.0, 1.0) } else { 0.0 };
+    let fillw = (bar.width as f64 * frac).round() as u16;
+    for i in 0..bar.width {
+        let (ch, col) = if i < fillw { ("━", t.accent) } else { ("─", t.track) };
+        buf.set_string(bar.x + i, bar.y, ch, Style::default().fg(c(col)));
+    }
+    let pp = if snap.state == PlayState::Playing { "⏸" } else { "▶" };
+    let time = format!("{} / {}", fmt_time(pos.min(len.max(pos))), fmt_time(len));
+    // The time always fits; the buttons give way in very narrow windows.
+    let tw = (time.width() as u16).min(inner.width);
+    if inner.width >= tw + 7 {
+        put(buf, inner.x, inner.y + 2, &format!("⏮ {pp} ⏭"), 5, Style::default().fg(c(t.fg)).add_modifier(Modifier::BOLD));
+    }
+    put_right(buf, right, inner.y + 2, &time, tw, Style::default().fg(c(t.muted)));
 }

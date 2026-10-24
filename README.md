@@ -80,6 +80,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `R` / `E` | rename / export playlist |
 | `L` | like |
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
+| `m` | mini mode: 3 lines for a small window (turns on by itself when the window is small) |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |
 | `[` / `]` | lyrics 0.5 s earlier / later for this song (saved per song) |

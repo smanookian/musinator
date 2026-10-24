@@ -55,6 +55,7 @@ pub enum Action {
     LyricsEarlier,
     FetchLyrics,
     FullLyrics,
+    MiniMode,
     LyricsLater,
     Rate1,
     Rate2,
@@ -117,6 +118,7 @@ actions! {
     ToggleScreen "toggle_screen" "Screens" "Library ↔ Now Playing" ["z"];
     Lyrics "lyrics" "Screens" "Lyrics on / off" ["l"];
     Visualizer "visualizer" "Screens" "Visualizer on / off" ["v"];
+    MiniMode "mini_mode" "Screens" "Mini mode (3 lines)" ["m"];
     FullLyrics "full_lyrics" "Screens" "Full-screen lyrics" ["f"];
     FetchLyrics "fetch_lyrics" "Screens" "Find lyrics online (LRCLIB)" ["ctrl+l"];
     LyricsEarlier "lyrics_earlier" "Screens" "Lyrics 0.5 s earlier" ["["];

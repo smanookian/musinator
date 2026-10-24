@@ -111,6 +111,8 @@ Servers, radio, Spotify (v2/v3). EQ, mini mode and tag editing (v1.1, see below)
 4. Tag editing, easy to hard: fill tags from the file name; edit one song (title, artist, album, album artist, year, track, disc, genre); edit a whole album; change/add cover art; look up tags online (MusicBrainz). Saves safely (write a copy, then replace).
 5. 10-band EQ with a visible curve, presets + custom.
 
+Done so far: full-screen lyrics, word-by-word karaoke, mini mode.
+
 Already added after v1: terminal color sync, sleep timer, lyrics offset, resume on start, star ratings, online lyrics on a key (LRCLIB, cached; optional `.lrc` next to songs).
 
 ## 10. Done when (v1)
