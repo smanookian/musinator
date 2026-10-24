@@ -766,7 +766,10 @@ fn change(app: &mut App, key: &str, dir: i32) -> bool {
     if key == "rate_switching" {
         let on = !crate::pwrate::enabled();
         match crate::pwrate::set(on) {
-            Ok(()) => app.info(if on { "PipeWire may now switch to the file's rate" } else { "PipeWire rate switching off" }),
+            Ok(()) => {
+                app.engine.send(Cmd::ReopenOutput);
+                app.info(if on { "PipeWire may now switch to the file's rate" } else { "PipeWire rate switching off" })
+            }
             Err(e) => app.error(format!("Can't change PipeWire config: {e:#}")),
         }
         return true;

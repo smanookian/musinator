@@ -46,8 +46,12 @@ pub fn set(on: bool) -> Result<()> {
     if has_module(&v) == on {
         return Ok(());
     }
-    std::fs::write(p.with_file_name("shell.json.bak-musinator"), &text)?;
     if on {
+        // Keep the user's file as it was before Musinator first touched it.
+        let bak = p.with_file_name("shell.json.bak-musinator");
+        if !bak.exists() {
+            std::fs::write(&bak, &text)?;
+        }
         let layout = &mut v["bar"]["layout"];
         if !layout["right"].is_array() {
             layout["right"] = json!([]);

@@ -76,6 +76,8 @@ pub enum Cmd {
     /// 0..=1
     Volume(f32),
     Gain(GainCfg),
+    /// Reconnect the audio output (e.g. after PipeWire's allowed rates changed).
+    ReopenOutput,
     Quit,
 }
 
@@ -405,6 +407,18 @@ impl Worker {
                     d.gain_db = gain::gain_db(&g, &d.track.gain, album);
                     d.amp = d.gain_db.map(gain::db_to_amp).unwrap_or(1.0);
                     self.snap.lock().gain_db = d.gain_db;
+                }
+            }
+            Cmd::ReopenOutput => {
+                self.out_fmt = None;
+                let cur = self.snap.lock().item_id;
+                if let Some(cur) = cur.filter(|_| self.state != PlayState::Stopped) {
+                    let state = self.state;
+                    let pos = Duration::from_secs_f64(self.position_frames() as f64 / self.audible.lock().rate.max(1) as f64);
+                    self.start_item(cur, pos);
+                    if state == PlayState::Paused {
+                        self.pause();
+                    }
                 }
             }
             Cmd::Quit => {}

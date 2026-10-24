@@ -160,17 +160,20 @@ fn worst_snr(s: &[f32], rate: u32, pieces: &[usize], edge: usize) -> f64 {
 }
 
 fn play_all(files: &[PathBuf]) -> Vec<f32> {
+    play_with(files, GainCfg { mode: RgMode::Off, ..Default::default() }, crate::model::Gain::default())
+}
+
+fn play_with(files: &[PathBuf], cfg: GainCfg, gain: crate::model::Gain) -> Vec<f32> {
     let src: Arc<dyn Source> = Arc::new(Files(Arc::from("files")));
     let mut sources = Sources::default();
     sources.add(src.clone());
     let cap = Arc::new(Mutex::new(Vec::new()));
     let cap2 = cap.clone();
-    let engine = Engine::start_with(Arc::new(sources), 1.0, GainCfg { mode: RgMode::Off, ..Default::default() }, move |r, _| {
-        Ok(Box::new(Capture::start(r, cap2)))
-    })
-    .unwrap();
-    let tracks: Vec<Arc<Track>> =
-        files.iter().map(|p| Arc::new(Track { r: Some(TrackRef::new(src.id(), p.to_string_lossy())), ..Default::default() })).collect();
+    let engine = Engine::start_with(Arc::new(sources), 1.0, cfg, move |r, _| Ok(Box::new(Capture::start(r, cap2)))).unwrap();
+    let tracks: Vec<Arc<Track>> = files
+        .iter()
+        .map(|p| Arc::new(Track { r: Some(TrackRef::new(src.id(), p.to_string_lossy())), gain, ..Default::default() }))
+        .collect();
     let first = engine.queue.lock().replace(tracks, None, 0).unwrap();
     engine.send(Cmd::PlayItem(first));
     let t0 = Instant::now();
@@ -240,4 +243,21 @@ fn seek_lands_on_target() {
     // First sample after the seek continues the sine at frame 110250.
     let want = (AMP * (2.0 * std::f64::consts::PI * FREQ * 110_250.0 / 44_100.0).sin()) as f32;
     assert!((buf[0] - want).abs() < 0.001, "{} vs {}", buf[0], want);
+}
+
+#[test]
+fn replaygain_scales_the_samples() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = make_album(dir.path(), "rg", &["flac", "-c:a", "flac"], 44_100, &[44_100]);
+    let peak = |v: &[f32]| v[4410..].iter().fold(0f32, |a, b| a.max(b.abs()));
+    let plain = peak(&play_all(&files));
+    let tagged = crate::model::Gain { track_db: Some(-6.0), track_peak: Some(0.25), ..Default::default() };
+    let cfg = GainCfg { mode: RgMode::Track, ..Default::default() };
+    let quiet = peak(&play_with(&files, cfg, tagged));
+    let ratio_db = 20.0 * (quiet / plain).log10();
+    assert!((ratio_db + 6.0).abs() < 0.05, "applied {ratio_db:.2} dB");
+    // Preamp +3 dB on top.
+    let loud = peak(&play_with(&files, GainCfg { preamp_db: 3.0, ..cfg }, tagged));
+    let ratio_db = 20.0 * (loud / plain).log10();
+    assert!((ratio_db + 3.0).abs() < 0.05, "applied {ratio_db:.2} dB");
 }
