@@ -116,7 +116,8 @@ pub fn pane(f: &mut Frame, app: &App, area: Rect, title: &str, hints: &str, focu
         Style::default().fg(c(tfg)).bg(c(bg)).add_modifier(Modifier::BOLD),
     );
     if show_hints {
-        put_right(buf, bar.x + bar.width - 1, bar.y, hints, hw, Style::default().fg(c(hfg)).bg(c(bg)));
+        let hx = put_right(buf, bar.x + bar.width - 1, bar.y, hints, hw, Style::default().fg(c(hfg)).bg(c(bg)));
+        super::clicks::hint_text(hx, bar.y, hints);
     }
     let mut content = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
     if app.cfg.density == "comfortable" && content.height > 4 {
@@ -136,6 +137,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     fill(f.buffer_mut(), area, app.theme.bg);
     f.buffer_mut().set_style(area, Style::default().fg(c(app.theme.fg)));
     app.hit = Hits::default();
+    super::clicks::clear();
     app.viz_area = Rect::default();
     if area.width < 20 || area.height < 3 {
         put(f.buffer_mut(), 0, 0, "Window too small", area.width, Style::default().fg(c(app.theme.muted)));
@@ -534,7 +536,8 @@ fn progress(buf: &mut Buffer, app: &mut App, r: Rect) {
     }
 }
 
-fn controls(app: &App, with_vol: bool) -> Vec<(String, Rgb, bool)> {
+/// Player controls: (text, color, bold, what a click does).
+fn controls(app: &App, with_vol: bool) -> Vec<(String, Rgb, bool, Option<Action>)> {
     let t = &app.theme;
     let snap = app.now();
     let (shuffle, repeat) = {
@@ -542,11 +545,20 @@ fn controls(app: &App, with_vol: bool) -> Vec<(String, Rgb, bool)> {
         (q.shuffle, q.repeat)
     };
     let pp = if snap.state == PlayState::Playing { "⏸" } else { "⏯" };
-    let mut v = vec![(controls_text(pp), t.fg, true)];
-    v.push((format!("   ⇄ {}", if shuffle { "on" } else { "off" }), if shuffle { t.accent } else { t.muted }, false));
-    v.push((format!("   ↻ {}", repeat.label()), if repeat != crate::model::Repeat::Off { t.accent } else { t.muted }, false));
+    let mut v = vec![
+        ("⏮".to_string(), t.fg, true, Some(Action::Prev)),
+        ("  ".to_string(), t.fg, false, None),
+        (pp.to_string(), t.fg, true, Some(Action::PlayPause)),
+        ("  ".to_string(), t.fg, false, None),
+        ("⏭".to_string(), t.fg, true, Some(Action::Next)),
+        ("   ".to_string(), t.fg, false, None),
+    ];
+    v.push((format!("⇄ {}", if shuffle { "on" } else { "off" }), if shuffle { t.accent } else { t.muted }, false, Some(Action::Shuffle)));
+    v.push(("   ".to_string(), t.fg, false, None));
+    let rc = if repeat != crate::model::Repeat::Off { t.accent } else { t.muted };
+    v.push((format!("↻ {}", repeat.label()), rc, false, Some(Action::Repeat)));
     if with_vol {
-        v.push((format!("   vol {}%", (snap.volume * 100.0).round()), t.muted, false));
+        v.push((format!("   vol {}%", (snap.volume * 100.0).round()), t.muted, false, None));
     }
     v
 }
@@ -669,9 +681,13 @@ fn now_panel(f: &mut Frame, app: &mut App, area: Rect) {
     if inner.height >= 6 {
         let ctrl = controls(app, false);
         let mut cx = x;
-        for (s, col, bold) in &ctrl {
+        for (s, col, bold, act) in &ctrl {
             let st = Style::default().fg(c(*col));
+            let x0 = cx;
             cx = put(buf, cx, y0 + 4, s, (x + w).saturating_sub(cx), if *bold { st.add_modifier(Modifier::BOLD) } else { st });
+            if let Some(a) = act {
+                super::clicks::add(Rect { x: x0, y: y0 + 4, width: (cx - x0).max(2), height: 1 }, super::clicks::Click::Act(*a));
+            }
         }
         let mut info = audio_info(app);
         // Too wide: drop the least important parts first, keep format and EQ.
@@ -817,9 +833,13 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
     progress(buf, app, full);
     let ctrl = controls(app, true);
     let mut cx = full.x;
-    for (s, col, bold) in &ctrl {
+    for (s, col, bold, act) in &ctrl {
         let st = Style::default().fg(c(*col));
+        let x0 = cx;
         cx = put(buf, cx, by + 1, s, (full.x + full.width).saturating_sub(cx), if *bold { st.add_modifier(Modifier::BOLD) } else { st });
+        if let Some(a) = act {
+            super::clicks::add(Rect { x: x0, y: by + 1, width: (cx - x0).max(2), height: 1 }, super::clicks::Click::Act(*a));
+        }
     }
     if viz_h > 0 {
         let vr = Rect { x: full.x, y: by + 3, width: full.width, height: viz_h };
@@ -950,7 +970,8 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
     let rw = right.width() as u16;
     put(buf, r.x, r.y, &left.0, r.width.saturating_sub(rw + 3), Style::default().fg(c(left.1)).bg(c(t.status_bar)));
     if rw > 0 {
-        put_right(buf, r.x + r.width - 1, r.y, &right, rw, Style::default().fg(c(t.muted)).bg(c(t.status_bar)));
+        let hx = put_right(buf, r.x + r.width - 1, r.y, &right, rw, Style::default().fg(c(t.muted)).bg(c(t.status_bar)));
+        super::clicks::hint_text(hx, r.y, &right);
     }
 }
 
@@ -1191,16 +1212,17 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
     let tw = (time.width() as u16).min(inner.width);
     put_right(buf, right, inner.y + 2, &time, tw, Style::default().fg(c(t.muted)));
     // Same spacing as the other screens: these symbols are drawn wide.
-    let pp = if snap.state == PlayState::Playing { "⏸" } else { "⏯" };
-    let ctrl = controls_text(pp);
-    let cw = ctrl.width() as u16 + 2;
+    let ctrl = controls(app, false);
+    let ctrl = &ctrl[..5];
+    let cw = ctrl.iter().map(|c| c.0.width() as u16).sum::<u16>() + 2;
     if inner.width >= tw + cw + 2 {
-        put(buf, inner.x, inner.y + 2, &ctrl, cw, Style::default().fg(c(t.fg)).add_modifier(Modifier::BOLD));
+        let mut cx = inner.x;
+        for (s, col, _, act) in ctrl {
+            let x0 = cx;
+            cx = put(buf, cx, inner.y + 2, s, cw, Style::default().fg(c(*col)).add_modifier(Modifier::BOLD));
+            if let Some(a) = act {
+                super::clicks::add(Rect { x: x0, y: inner.y + 2, width: (cx - x0).max(2), height: 1 }, super::clicks::Click::Act(*a));
+            }
+        }
     }
-}
-
-/// "⏮  ⏸  ⏭". Paused shows ⏯ (not ▶): many fonts draw ⏮ ⏸ ⏭ ⏯ as matching boxes,
-/// but ▶ as a plain triangle.
-fn controls_text(pp: &str) -> String {
-    format!("⏮  {pp}  ⏭")
 }

@@ -321,15 +321,21 @@ pub fn notify(t: &Track) {
     let title = t.display_title().to_string();
     let body = if t.album.is_empty() { t.artist.clone() } else { format!("{} — {}", t.artist, t.album) };
     let icon = t.art.as_ref().map(crate::app::art::cache_file).filter(|p| p.exists()).map(|p| p.display().to_string()).unwrap_or_default();
+    // Replace the previous song's notification instead of stacking a new one.
+    static LAST: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    use std::sync::atomic::Ordering::Relaxed;
     std::thread::spawn(move || {
         let Ok(c) = mpris_server::zbus::blocking::Connection::session() else { return };
         let hints: std::collections::HashMap<&str, mpris_server::zbus::zvariant::Value> = std::collections::HashMap::new();
-        let _ = c.call_method(
+        let reply = c.call_method(
             Some("org.freedesktop.Notifications"),
             "/org/freedesktop/Notifications",
             Some("org.freedesktop.Notifications"),
             "Notify",
-            &("Musinator", 0u32, icon, title, body, Vec::<&str>::new(), hints, 4000i32),
+            &("Musinator", LAST.load(Relaxed), icon, title, body, Vec::<&str>::new(), hints, 4000i32),
         );
+        if let Some(id) = reply.ok().and_then(|r| r.body().deserialize::<u32>().ok()) {
+            LAST.store(id, Relaxed);
+        }
     });
 }

@@ -170,7 +170,71 @@ impl TagEdit {
 
 const COVER_ROW: usize = 8;
 
+/// Row ids at or above this are Settings sections (left column).
+const SECTION_ROW: usize = 1000;
+
 impl Dialog {
+    /// The selected row of a list dialog, if it has one.
+    fn cursor(&self) -> Option<usize> {
+        Some(match self {
+            Dialog::Search { cursor, .. }
+            | Dialog::Themes { cursor, .. }
+            | Dialog::Keys { cursor, .. }
+            | Dialog::Folders { cursor, .. }
+            | Dialog::Sleep { cursor }
+            | Dialog::PlaylistPick { cursor, .. } => *cursor,
+            Dialog::Tags(e) => e.mb.as_ref().map_or(e.row, |(_, c)| *c),
+            Dialog::Eq { band } => *band,
+            Dialog::Settings { row, right: true, .. } => *row,
+            _ => return None,
+        })
+    }
+
+    /// A row was clicked: move there with the same steps as the keys (so
+    /// previews etc. follow); a click on the selected row is `enter`.
+    /// Returns false when the dialog closed.
+    pub fn click_row(&mut self, app: &mut App, idx: usize) -> bool {
+        let key = |c: KeyCode| KeyEvent::new(c, KeyModifiers::NONE);
+        if let Dialog::Settings { section, row, right } = self {
+            if idx >= SECTION_ROW {
+                *section = idx - SECTION_ROW;
+                *row = 0;
+                *right = false;
+                return true;
+            }
+            if !*right || *row != idx {
+                *right = true;
+                *row = idx;
+                return true;
+            }
+            return self.key(app, key(KeyCode::Enter));
+        }
+        let Some(cur) = self.cursor() else { return true };
+        // In the tag editor, clicking a field only selects it (enter would save).
+        let fields = matches!(self, Dialog::Tags(e) if e.mb.is_none());
+        let eq = matches!(self, Dialog::Eq { .. });
+        let (down, up) = if eq { (KeyCode::Right, KeyCode::Left) } else { (KeyCode::Down, KeyCode::Up) };
+        if idx == cur {
+            if fields || eq {
+                return true;
+            }
+            return self.key(app, key(KeyCode::Enter));
+        }
+        // Search rows skip headers, so step until the cursor gets there.
+        for _ in 0..500 {
+            let Some(c) = self.cursor() else { break };
+            if c == idx {
+                break;
+            }
+            if !self.key(app, key(if idx > c { down } else { up })) {
+                return false;
+            }
+            if self.cursor() == Some(c) {
+                break;
+            }
+        }
+        true
+    }
     pub fn tags(info: super::worker::EditInfo) -> Self {
         let all = info.fields;
         let num = |s: &str| s.split('/').next().and_then(|n| n.trim().parse::<u32>().ok()).unwrap_or(0);
@@ -838,6 +902,7 @@ impl Dialog {
                         .collect::<Vec<_>>()
                         .join(" · ");
                     sel_row(f, app, inner, y, "", k == *cur);
+                    row_hit(inner, y, k);
                     let bg = if k == *cur { t.selection } else { t.dialog_bg };
                     let ew = (extra.width() as u16).min(inner.width / 2);
                     let ex = put_right(f.buffer_mut(), inner.x + inner.width - 2, y, &extra, ew, Style::default().fg(c(t.muted)).bg(c(bg)));
@@ -876,6 +941,7 @@ impl Dialog {
                     };
                     put(b, inner.x + 2, y, if changed { "•" } else { " " }, 1, Style::default().fg(c(t.warn)).bg(c(t.dialog_bg)));
                     put(b, inner.x + 4, y, label, 13, if sel { bold } else { muted });
+                    row_hit(inner, y, k);
                     fill(b, field, bg);
                     if i == COVER_ROW {
                         if e.cover_remove {
@@ -921,6 +987,7 @@ impl Dialog {
                 let inner = frame(f, app, 40, SLEEP.len() as u16 + 4, "Sleep timer");
                 for (k, (label, _)) in SLEEP.iter().enumerate() {
                     sel_row(f, app, inner, inner.y + 1 + k as u16, label, k == *cursor);
+                    row_hit(inner, inner.y + 1 + k as u16, k);
                 }
                 let left = app
                     .sleep_label()
@@ -936,6 +1003,7 @@ impl Dialog {
                 for (k, (_, name)) in entries.iter().enumerate().skip(start).take(rows) {
                     let y = inner.y + 1 + (k - start) as u16;
                     sel_row(f, app, inner, y, name, k == *cursor);
+                    row_hit(inner, y, k);
                 }
                 hints_row(f.buffer_mut(), inner, "enter add · esc cancel", muted);
             }
@@ -990,6 +1058,7 @@ impl Dialog {
                             let (title, right) = hit_text(&hits[*i]);
                             let sel = *i == *cursor;
                             sel_row(f, app, list, y, &title, sel);
+                            row_hit(list, y, *i);
                             let bg = if sel { t.selection } else { t.dialog_bg };
                             put_right(
                                 f.buffer_mut(),
@@ -1019,6 +1088,7 @@ impl Dialog {
                     let saved = th.id == app.cfg.theme;
                     let name = format!("{}{}", th.label, if saved { "  ✓" } else { "" });
                     sel_row(f, app, inner, y, &name, k == *cursor);
+                    row_hit(inner, y, k);
                     let b = f.buffer_mut();
                     let sx = inner.x + inner.width - 12;
                     for (j, col) in [th.bg, th.fg, th.accent, th.viz[0], th.viz[1], th.viz[2]].iter().enumerate() {
@@ -1036,6 +1106,7 @@ impl Dialog {
                     let y = inner.y + 1 + i as u16;
                     let sel = i == *section;
                     let r = Rect { x: inner.x + 1, width: left_w, ..inner };
+                    row_hit(r, y, SECTION_ROW + i);
                     if sel && !*right {
                         sel_row(f, app, r, y, s, true);
                     } else {
@@ -1053,6 +1124,7 @@ impl Dialog {
                     }
                     let sel = *right && i == *row;
                     sel_row(f, app, rr, y, s.label, sel);
+                    row_hit(rr, y, i);
                     let v = match s.kind {
                         Kind::Open if s.key == "theme" => format!("{} ›", app.theme.label),
                         Kind::Open if s.key == "keys" => "›".into(),
@@ -1119,6 +1191,7 @@ impl Dialog {
                     let y = inner.y + 1 + (k - *offset) as u16;
                     let label = format!("{:<9} {}", a.group, a.label);
                     sel_row(f, app, inner, y, &label, k == *cursor);
+                    row_hit(inner, y, k);
                     let keys = app.keys.keys(a.action).iter().map(|c| c.to_string()).collect::<Vec<_>>().join("  ");
                     let custom = app.cfg.keys.contains_key(a.id);
                     let bg = if k == *cursor { t.selection } else { t.dialog_bg };
@@ -1142,6 +1215,7 @@ impl Dialog {
                 }
                 for (k, p) in app.cfg.music_folders.clone().iter().enumerate() {
                     sel_row(f, app, inner, inner.y + 1 + k as u16, p, k == *cursor);
+                    row_hit(inner, inner.y + 1 + k as u16, k);
                 }
                 hints_row(f.buffer_mut(), inner, "a add · d remove · esc done", muted);
             }
@@ -1225,6 +1299,12 @@ fn hints_row(b: &mut ratatui::buffer::Buffer, inner: Rect, s: &str, st: Style) {
         return;
     }
     put(b, inner.x + 2, inner.y + inner.height - 1, s, inner.width.saturating_sub(4), st);
+    super::clicks::hint_text(inner.x + 2, inner.y + inner.height - 1, s);
+}
+
+/// A clickable dialog row.
+fn row_hit(area: Rect, y: u16, idx: usize) {
+    super::clicks::add(Rect { x: area.x, y, width: area.width, height: 1 }, super::clicks::Click::Row(idx));
 }
 
 /// A dialog list row: tint + `→` when selected.
@@ -1487,6 +1567,7 @@ fn draw_eq(f: &mut Frame, app: &mut App, band: usize) {
         let lx = x.saturating_sub(1).max(gx);
         put(b, lx, vy, &format!("{val:^3}"), 3, st);
         put(b, lx, vy + 1, &format!("{:^3}", LABELS[i]), 3, if sel { st } else { muted });
+        super::clicks::add(Rect { x: lx, y: vy, width: 3, height: 2 }, super::clicks::Click::Row(i));
     }
     put(b, inner.x + 1, vy, "dB", 3, muted);
     if on && pre < 0.0 {

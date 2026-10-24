@@ -53,6 +53,8 @@ Then run `musinator`. It scans `~/Music` in the background. Add other folders in
 
 All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 
+**Mouse:** click the player buttons (⏮ ⏸ ⏭, shuffle, repeat), the progress bar, any key hint (for example `a queue` or `/ search`) and rows in lists and windows. Click a selected row again to open it; the wheel scrolls.
+
 | Key | Action |
 |-----|--------|
 | `space` | play / pause |

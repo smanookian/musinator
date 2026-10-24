@@ -6,6 +6,7 @@
 
 pub mod art;
 pub mod biglyric;
+mod clicks;
 pub mod dialogs;
 pub mod draw;
 pub mod session;
@@ -901,10 +902,40 @@ impl App {
     }
 
     fn on_mouse(&mut self, m: crossterm::event::MouseEvent) {
-        if self.dialog.is_some() {
+        use clicks::Click;
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let p = ratatui::layout::Position::new(m.column, m.row);
+        let key = |c: KeyCode| KeyEvent::new(c, KeyModifiers::NONE);
+        // Buttons and key hints drawn this frame (dialogs on top).
+        if m.kind == MouseEventKind::Down(MouseButton::Left)
+            && let Some(c) = clicks::at(p)
+        {
+            match c {
+                Click::Act(a) if self.dialog.is_none() => self.act(a),
+                Click::Act(_) => {}
+                Click::Key(k) => self.on_term(TermEvent::Key(k)),
+                Click::Row(i) => {
+                    if let Some(mut d) = self.dialog.take() {
+                        let keep = d.click_row(self, i);
+                        if keep && self.dialog.is_none() {
+                            self.dialog = Some(d);
+                        }
+                    }
+                }
+            }
+            self.dirty = true;
             return;
         }
-        let p = ratatui::layout::Position::new(m.column, m.row);
+        if self.dialog.is_some() {
+            // The wheel moves the dialog's selection, like the arrow keys.
+            let k = match m.kind {
+                MouseEventKind::ScrollDown => key(KeyCode::Down),
+                MouseEventKind::ScrollUp => key(KeyCode::Up),
+                _ => return,
+            };
+            self.on_term(TermEvent::Key(k));
+            return;
+        }
         match m.kind {
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                 let d = if m.kind == MouseEventKind::ScrollDown { 3 } else { -3 };
@@ -1349,6 +1380,11 @@ pub fn album_title(t: &Track) -> String {
 }
 
 /// Start the TUI.
+/// A background part ended unexpectedly.
+fn stopped(what: &str) -> anyhow::Error {
+    anyhow::anyhow!("internal error: the {what} part stopped")
+}
+
 pub fn run(cfg: Config) -> Result<()> {
     let (lib_tx, lib_rx) = cb::unbounded();
     let lib = Library::new(crate::config::data_dir().join("library.db"), cfg.folders(), lib_tx);
@@ -1373,9 +1409,17 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     let (in_tx, in_rx) = cb::unbounded();
     std::thread::Builder::new().name("input".into()).spawn(move || {
-        while let Ok(e) = crossterm::event::read() {
-            if in_tx.send(e).is_err() {
-                break;
+        loop {
+            match crossterm::event::read() {
+                Ok(e) => {
+                    if in_tx.send(e).is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("musinator: reading the keyboard failed: {e}");
+                    break;
+                }
             }
         }
     })?;
@@ -1386,8 +1430,12 @@ pub fn run(cfg: Config) -> Result<()> {
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
     let (big_tx, big_rx) = cb::unbounded();
     let big = kitty_ok.then(|| biglyric::BigLyrics::start(picker.clone(), big_tx));
+    // Parts that are not running (no Kitty pictures, not on Omarchy) must never wake the
+    // loop: their closed channels would otherwise look ready all the time.
+    let big_rx = if big.is_some() { big_rx } else { cb::never() };
     let (theme_tx, theme_rx) = cb::unbounded::<()>();
     let _theme_watch = watch_omarchy(theme_tx);
+    let theme_rx = if _theme_watch.is_some() { theme_rx } else { cb::never() };
     let mpris = if cfg.mpris { crate::mpris::Mpris::start(engine_handle(&engine)).ok() } else { None };
 
     let mut app = App {
@@ -1480,13 +1528,13 @@ pub fn run(cfg: Config) -> Result<()> {
             let tick = app.next_tick.map(cb::at).unwrap_or_else(cb::never);
             let mpris_rx = app.mpris.as_ref().map(|m| m.commands.clone()).unwrap_or_else(cb::never);
             cb::select! {
-                recv(in_rx) -> e => app.on_term(e?),
-                recv(app.engine.events) -> e => { let e = e?; app.on_engine(e) },
-                recv(lib_rx) -> e => app.on_lib(e?),
-                recv(w_rx) -> m => app.on_worker(m?),
-                recv(a_rx) -> a => app.on_art(a?),
+                recv(in_rx) -> e => app.on_term(e.map_err(|_| stopped("keyboard input"))?),
+                recv(app.engine.events) -> e => { let e = e.map_err(|_| stopped("audio engine"))?; app.on_engine(e) },
+                recv(lib_rx) -> e => app.on_lib(e.map_err(|_| stopped("library"))?),
+                recv(w_rx) -> m => app.on_worker(m.map_err(|_| stopped("worker"))?),
+                recv(a_rx) -> a => app.on_art(a.map_err(|_| stopped("pictures"))?),
                 recv(big_rx) -> b => {
-                    let b = b?;
+                    let b = b.map_err(|_| stopped("big lyrics"))?;
                     app.big_pics.retain(|(k, _)| *k != b.key);
                     app.big_pics.push((b.key, b.proto));
                     if app.big_pics.len() > 40 {
@@ -1495,7 +1543,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     app.dirty = true;
                 },
                 recv(theme_rx) -> _ => { while theme_rx.try_recv().is_ok() {} app.reload_omarchy() },
-                recv(ipc_rx) -> r => app.on_ipc(r?),
+                recv(ipc_rx) -> r => app.on_ipc(r.map_err(|_| stopped("command socket"))?),
                 recv(mpris_rx) -> c => { if let Ok(c) = c { app.on_mpris(c) } },
                 recv(tick) -> _ => { app.next_tick = None; app.on_tick() },
             }
