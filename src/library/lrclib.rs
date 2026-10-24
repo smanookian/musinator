@@ -27,11 +27,23 @@ fn get(url: &str, query: &[(&str, String)]) -> Result<Option<Value>> {
         req = req.query(*k, v);
     }
     let mut resp = req.call()?;
+    // lrclib.net says "busy, retry in a moment" (503/429) at times: retry a few times.
+    for wait in [1, 2, 4] {
+        if !matches!(resp.status().as_u16(), 429 | 502 | 503) {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(wait));
+        let mut again = agent.get(url).header("User-Agent", UA);
+        for (k, v) in query {
+            again = again.query(*k, v);
+        }
+        resp = again.call()?;
+    }
     if resp.status() == 404 {
         return Ok(None);
     }
     if !resp.status().is_success() {
-        anyhow::bail!("lrclib.net answered {}", resp.status());
+        anyhow::bail!("lrclib.net is busy ({}), try again in a moment", resp.status());
     }
     Ok(Some(serde_json::from_str(&resp.body_mut().read_to_string()?)?))
 }

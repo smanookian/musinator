@@ -34,11 +34,15 @@ impl LocalSource {
         let mut st = c.prepare_cached(&sql)?;
         let v = st.query_map(p, |r| {
             let year: Option<i32> = r.get(3)?;
-            let artist: String = r.get(2)?;
+            let mut artist: String = r.get(2)?;
+            if artist.is_empty() {
+                artist = "Unknown artist".into();
+            }
+            let title: String = r.get(1)?;
             Ok(Node {
                 id: format!("album:{}", r.get::<_, String>(0)?),
                 kind: NodeKind::Album,
-                title: r.get(1)?,
+                title: if title.is_empty() { "Unknown album".into() } else { title },
                 subtitle: match year {
                     Some(y) => format!("{artist} · {y}"),
                     None => artist,
