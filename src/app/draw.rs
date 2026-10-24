@@ -541,8 +541,8 @@ fn controls(app: &App, with_vol: bool) -> Vec<(String, Rgb, bool)> {
         let q = app.engine.queue.lock();
         (q.shuffle, q.repeat)
     };
-    let pp = if snap.state == PlayState::Playing { "⏸" } else { "▶" };
-    let mut v = vec![(format!("⏮  {pp}  ⏭"), t.fg, true)];
+    let pp = if snap.state == PlayState::Playing { "⏸" } else { "⏯" };
+    let mut v = vec![(controls_text(pp), t.fg, true)];
     v.push((format!("   ⇄ {}", if shuffle { "on" } else { "off" }), if shuffle { t.accent } else { t.muted }, false));
     v.push((format!("   ↻ {}", repeat.label()), if repeat != crate::model::Repeat::Off { t.accent } else { t.muted }, false));
     if with_vol {
@@ -1094,7 +1094,8 @@ fn words_width(words: &[String]) -> u16 {
 
 // ---------------- mini mode ----------------
 
-/// Three lines: title / artist, progress, controls + time. Bordered when there is room.
+/// Three lines (title / artist, progress, controls + time) plus the cover when
+/// there is room: above the text in a tall window, left of it in a wide one.
 fn mini(f: &mut Frame, app: &mut App, area: Rect) {
     let t = app.theme.clone();
     let inner = if area.height >= 5 {
@@ -1104,15 +1105,39 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
             .border_type(kind)
             .border_style(Style::default().fg(c(t.border)).bg(c(t.bg)))
             .style(Style::default().bg(c(t.bg)));
-        let r = Rect { height: 5, ..area };
-        let i = block.inner(r);
-        f.render_widget(block, r);
+        let i = block.inner(area);
+        f.render_widget(block, area);
         Rect { x: i.x + 1, width: i.width.saturating_sub(2), ..i }
     } else {
         Rect { height: 3.min(area.height), ..area }
     };
     let snap = app.now();
+    // Where the cover and the three text lines go.
+    let mut text = Rect { height: 3.min(inner.height), ..inner };
+    let mut cover: Option<Rect> = None;
+    if snap.track.is_some() && inner.height >= 3 {
+        if inner.width < inner.height * 3 && inner.height >= 8 {
+            // Tall: cover on top, text at the bottom.
+            let room = inner.height - 4;
+            let r = cover_rect(0, 0, room, inner.width);
+            cover = Some(Rect { x: inner.x + (inner.width - r.width) / 2, y: inner.y + (room - r.height) / 2, ..r });
+            text = Rect { y: inner.y + inner.height - 3, height: 3, ..inner };
+        } else if inner.width >= 40 {
+            // Wide: cover on the left, text centered next to it.
+            let r = cover_rect(inner.x, inner.y, inner.height, inner.width / 3);
+            cover = Some(r);
+            let x = r.x + r.width + 2;
+            text = Rect { x, y: inner.y + (inner.height - 3) / 2, width: (inner.x + inner.width).saturating_sub(x), height: 3 };
+        }
+    }
+    if cover.is_none() {
+        text.y = inner.y + inner.height.saturating_sub(3) / 2;
+    }
+    if let (Some(r), Some(tr)) = (cover, snap.track.as_ref()) {
+        art_or_placeholder(f, app, r, tr.art.as_ref(), Slot::Panel);
+    }
     let buf = f.buffer_mut();
+    let inner = text;
     let right = inner.x + inner.width;
     let Some(track) = snap.track.clone() else {
         put(buf, inner.x, inner.y, "♪ Nothing playing", inner.width, Style::default().fg(c(t.muted)));
@@ -1135,7 +1160,6 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
     if inner.height < 3 {
         return;
     }
-    // Progress bar only (times go on the last line, like the mockup).
     let pos = app.engine.position().as_millis() as u64;
     let len = track.duration_ms.unwrap_or(0);
     let bar = Rect { y: inner.y + 1, height: 1, ..inner };
@@ -1146,12 +1170,21 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
         let (ch, col) = if i < fillw { ("━", t.accent) } else { ("─", t.track) };
         buf.set_string(bar.x + i, bar.y, ch, Style::default().fg(c(col)));
     }
-    let pp = if snap.state == PlayState::Playing { "⏸" } else { "▶" };
     let time = format!("{} / {}", fmt_time(pos.min(len.max(pos))), fmt_time(len));
     // The time always fits; the buttons give way in very narrow windows.
     let tw = (time.width() as u16).min(inner.width);
-    if inner.width >= tw + 7 {
-        put(buf, inner.x, inner.y + 2, &format!("⏮ {pp} ⏭"), 5, Style::default().fg(c(t.fg)).add_modifier(Modifier::BOLD));
-    }
     put_right(buf, right, inner.y + 2, &time, tw, Style::default().fg(c(t.muted)));
+    // Same spacing as the other screens: these symbols are drawn wide.
+    let pp = if snap.state == PlayState::Playing { "⏸" } else { "⏯" };
+    let ctrl = controls_text(pp);
+    let cw = ctrl.width() as u16 + 2;
+    if inner.width >= tw + cw + 2 {
+        put(buf, inner.x, inner.y + 2, &ctrl, cw, Style::default().fg(c(t.fg)).add_modifier(Modifier::BOLD));
+    }
+}
+
+/// "⏮  ⏸  ⏭". Paused shows ⏯ (not ▶): many fonts draw ⏮ ⏸ ⏭ ⏯ as matching boxes,
+/// but ▶ as a plain triangle.
+fn controls_text(pp: &str) -> String {
+    format!("⏮  {pp}  ⏭")
 }
