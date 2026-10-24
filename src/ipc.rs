@@ -105,7 +105,7 @@ pub fn status_view(v: &EngineView) -> Value {
         j["duration"] = json!(t.duration_ms.map(|d| d as f64 / 1000.0));
         j["format"] = json!({
             "codec": f.codec, "sample_rate": f.sample_rate, "bits": f.bits, "channels": f.channels,
-            "output_rate": out_rate, "resampled": resampled,
+            "output_rate": out_rate, "resampled": resampled, "latency_ms": v.latency().as_millis() as u64,
             "bit_perfect": !resampled && out_rate != 0 && s.volume >= 1.0 && s.gain_db.is_none(),
         });
         j["gain_db"] = json!(s.gain_db.map(|g| (g as f64 * 10.0).round() / 10.0));

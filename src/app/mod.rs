@@ -1168,6 +1168,11 @@ impl App {
         if self.lyrics_lookup.is_some() {
             want(Duration::from_millis(100));
         }
+        if snap.state == PlayState::Playing
+            && let Some(d) = self.lyric_wait()
+        {
+            want(d);
+        }
         if let Some(Sleep::At(t)) = self.sleep {
             want(t.saturating_duration_since(Instant::now()).max(Duration::from_millis(50)).min(Duration::from_secs(30)));
         }
@@ -1243,7 +1248,7 @@ impl App {
         if t.r.as_ref() != Some(r) {
             return None;
         }
-        let ms = (self.engine.position().as_millis() as i64 - self.lyrics_offset).max(0) as u64;
+        let ms = self.lyric_clock();
         Some((l, lrc::current(l, ms)))
     }
 
@@ -1643,5 +1648,25 @@ impl App {
     /// Prepare a line ahead of time (the next lyric line).
     pub fn big_prefetch(&mut self, key: biglyric::Key) {
         let _ = self.big_pic(&key);
+    }
+}
+
+impl App {
+    /// Song time used for lyrics: what you hear, minus your offset, plus the lead time.
+    pub fn lyric_clock(&self) -> u64 {
+        let lead = (self.cfg.lyrics_lead * 1000.0) as i64;
+        (self.engine.position().as_millis() as i64 - self.lyrics_offset + lead).max(0) as u64
+    }
+
+    /// Time until the next lyric line change, when lyrics are on screen.
+    fn lyric_wait(&self) -> Option<Duration> {
+        let showing = self.lyrics_full || (self.screen == Screen::NowPlaying && self.cfg.lyrics);
+        if !showing {
+            return None;
+        }
+        let (l, cur) = self.current_lyric()?;
+        let next = l.synced.get(cur.map(|c| c + 1).unwrap_or(0))?.0;
+        let now = self.lyric_clock();
+        Some(Duration::from_millis(next.saturating_sub(now)).max(Duration::from_millis(5)))
     }
 }

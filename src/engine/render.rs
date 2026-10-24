@@ -20,6 +20,8 @@ pub struct Shared {
     pub graph_rate: AtomicU32,
     /// Rate and channels the renderer currently expects.
     pub stream_rate: AtomicU32,
+    /// Time from handing samples to PipeWire until they are heard (µs).
+    pub latency_us: AtomicU32,
     pub channels: AtomicU32,
 }
 

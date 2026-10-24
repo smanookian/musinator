@@ -112,10 +112,12 @@ fn connect(core: &pw::core::CoreRc, fmt: OutputFormat, renderer: Rc<RefCell<Rend
     let listener = stream
         .add_local_listener_with_user_data(())
         .process(move |stream, _| {
+            let mut delay_us = 0u64;
             if let Ok(t) = stream.time() {
                 let r = t.rate();
                 if r.num > 0 && r.denom > 0 {
                     shared.graph_rate.store(r.denom / r.num, Relaxed);
+                    delay_us = (t.delay().max(0) as u64 * r.num as u64 * 1_000_000) / r.denom as u64;
                 }
             }
             let Some(mut buffer) = stream.dequeue_buffer() else { return };
@@ -133,6 +135,10 @@ fn connect(core: &pw::core::CoreRc, fmt: OutputFormat, renderer: Rc<RefCell<Rend
                     // PipeWire buffers are suitably aligned for f32.
                     let out: &mut [f32] = unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr() as *mut f32, n) };
                     renderer.borrow_mut().render(out, channels, rate);
+                    // What we write now is heard after the graph delay plus this buffer.
+                    let lat = delay_us + frames as u64 * 1_000_000 / rate.max(1) as u64;
+                    let silent = shared.silent.load(Relaxed);
+                    shared.latency_us.store(if silent { 0 } else { lat.min(u32::MAX as u64) as u32 }, Relaxed);
                     frames
                 }
                 None => 0,

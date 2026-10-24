@@ -82,7 +82,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |
-| `[` / `]` | lyrics 0.5 s earlier / later (saved per song) |
+| `[` / `]` | lyrics 0.5 s earlier / later for this song (saved per song) |
 | `ctrl+t` | sleep timer (minutes, end of song, end of album) |
 | `ctrl+r` | rescan music folders |
 | `Q` or `ctrl+c` | quit (asks first; turn that off in Settings → Playback) |
@@ -142,6 +142,10 @@ More: [search](docs/screenshots/search-catppuccin.png) ·
 [half-blocks in foot](docs/screenshots/halfblocks-foot.png) ·
 [bit-perfect](docs/screenshots/bit-perfect.png) ·
 [Omarchy theme switch: before](docs/screenshots/omarchy-before.png) / [after](docs/screenshots/omarchy-after-live-switch.png)
+
+## Lyrics timing
+
+Like karaoke apps, Musinator shows the next line a little before it is sung (Settings → Appearance → Lyrics lead time, default 0.3 s). The lyric clock follows what you hear: it subtracts PipeWire's output delay. If one song is still off, `[` / `]` fix that song.
 
 ## Files
 

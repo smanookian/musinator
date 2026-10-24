@@ -242,7 +242,14 @@ impl EngineView {
         }
         let consumed = self.shared.consumed.load(Acquire);
         let played = consumed.saturating_sub(a.at) / a.channels as u64;
-        Duration::from_secs_f64((a.pos_frames + played) as f64 / a.rate as f64)
+        // What you hear lags what we handed to PipeWire by its output delay.
+        let lag = self.shared.latency_us.load(Relaxed) as u64 * a.rate as u64 / 1_000_000;
+        Duration::from_secs_f64((a.pos_frames + played.saturating_sub(lag)) as f64 / a.rate as f64)
+    }
+
+    /// PipeWire output delay right now.
+    pub fn latency(&self) -> Duration {
+        Duration::from_micros(self.shared.latency_us.load(Relaxed) as u64)
     }
 }
 

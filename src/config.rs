@@ -18,6 +18,7 @@ pub struct Config {
     pub shadow: bool,
     pub term_colors: bool,
     pub big_lyrics: bool,
+    pub lyrics_lead: f32,
     pub resume: bool,
     pub images: String,
     pub album_grid: bool,
@@ -53,6 +54,7 @@ impl Default for Config {
             shadow: true,
             term_colors: true,
             big_lyrics: true,
+            lyrics_lead: 0.3,
             resume: true,
             images: "auto".into(),
             album_grid: false,
@@ -206,6 +208,13 @@ pub const SETTINGS: &[Setting] = &[
         "In full-screen lyrics (f), draw the current line in big text. Kitty and Ghostty only.",
         Kind::Toggle
     ),
+    s!(
+        "lyrics_lead",
+        "Appearance",
+        "Lyrics lead time",
+        "Show the next lyric line this much before it is sung, so you can read it in time.",
+        Kind::Number { min: 0.0, max: 1.5, step: 0.1, unit: "s" }
+    ),
     s!("lyrics", "Appearance", "Lyrics", "Show synced lyrics on Now Playing when a song has them.", Kind::Toggle),
     s!("confirm_quit", "Playback", "Confirm before quitting", "Ask before Musinator closes.", Kind::Toggle),
     s!(
@@ -302,6 +311,7 @@ impl Config {
             "viz_fps" => format!("{} fps", self.viz_fps),
             "confirm_quit" => on(self.confirm_quit),
             "seek_small" => format!("{} s", self.seek_small),
+            "lyrics_lead" => format!("{:.1} s", self.lyrics_lead),
             "seek_big" => format!("{} s", self.seek_big),
             "rg_preamp" => format!("{:+.1} dB", self.rg_preamp),
             "rg_fallback" => format!("{:+.1} dB", self.rg_fallback),
@@ -378,6 +388,7 @@ impl Config {
                     "viz_fps" => self.viz_fps = (self.viz_fps as f64 + d).clamp(min, max) as u32,
                     "seek_small" => self.seek_small = (self.seek_small as f64 + d).clamp(min, max) as u32,
                     "seek_big" => self.seek_big = (self.seek_big as f64 + d).clamp(min, max) as u32,
+                    "lyrics_lead" => self.lyrics_lead = ((self.lyrics_lead as f64 + d).clamp(min, max) * 10.0).round() as f32 / 10.0,
                     "rg_preamp" => self.rg_preamp = (self.rg_preamp as f64 + d).clamp(min, max) as f32,
                     "rg_fallback" => self.rg_fallback = (self.rg_fallback as f64 + d).clamp(min, max) as f32,
                     _ => return false,
