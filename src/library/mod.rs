@@ -3,6 +3,7 @@
 
 pub mod db;
 pub mod lrc;
+pub mod lrclib;
 pub mod m3u8;
 pub mod tags;
 

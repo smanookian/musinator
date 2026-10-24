@@ -716,6 +716,18 @@ impl App {
                     self.dialog = Some(Dialog::confirm(format!("Delete playlist \"{name}\"?"), dialogs::Confirm::DeletePlaylist(id)));
                 }
             }
+            Action::FetchLyrics => {
+                let Some(t) = self.now().track else {
+                    self.info("Nothing playing");
+                    return;
+                };
+                if self.current_lyric().is_some_and(|(l, _)| !l.synced.is_empty()) {
+                    self.info("This song already has synced lyrics");
+                    return;
+                }
+                self.info("Looking up lyrics on lrclib.net…");
+                self.worker.send(Job::FetchLyrics { track: t, next_to_song: self.cfg.save_lyrics_next });
+            }
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
             Action::LyricsEarlier | Action::LyricsLater => {
                 let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {

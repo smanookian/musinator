@@ -38,6 +38,10 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    FetchLyrics {
+        track: Arc<Track>,
+        next_to_song: bool,
+    },
     Rate {
         track: TrackRef,
         rating: Option<u8>,
@@ -187,6 +191,23 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
         Job::RecordPlay(r) => {
             if let Err(e) = db::record_play(&local.conn(), &r.source, &r.id) {
                 send(err(e));
+            }
+        }
+        Job::FetchLyrics { track, next_to_song } => {
+            let r = track.tref().clone();
+            match crate::library::lrclib::fetch(&track) {
+                Ok(Some(text)) => {
+                    if let Err(e) = crate::library::lrclib::store(&r.id, &text, next_to_song) {
+                        send(err(e));
+                    }
+                    let lyrics = Some(crate::library::lrc::parse(&text)).filter(|l| !l.is_empty());
+                    let offset = db::lyrics_offset(&local.conn(), &r.source, &r.id);
+                    let synced = lyrics.as_ref().is_some_and(|l| !l.synced.is_empty());
+                    send(Msg::Lyrics { track: r, lyrics, offset });
+                    send(Msg::Info(if synced { "Lyrics found (synced)".into() } else { "Lyrics found (not synced)".into() }));
+                }
+                Ok(None) => send(Msg::Info("No lyrics found online for this song".into())),
+                Err(e) => send(Msg::Error(format!("Lyrics lookup failed: {e:#}"))),
             }
         }
         Job::Rate { track, rating } => match db::set_rating(&local.conn(), &track.source, &track.id, rating) {

@@ -743,6 +743,10 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
     let lyr_bottom = inner.y + top_h;
     if app.cfg.lyrics && y < lyr_bottom {
         let avail = (lyr_bottom - y) as usize;
+        if app.current_lyric().is_none() {
+            let hint = format!("No lyrics · {} looks them up online", app.keys.hint(Action::FetchLyrics));
+            put(buf, x, y, &hint, w, Style::default().fg(c(t.muted)));
+        }
         if let Some((l, cur)) = app.current_lyric() {
             if !l.synced.is_empty() {
                 let cur_i = cur.unwrap_or(0);

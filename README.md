@@ -12,7 +12,7 @@ A modern-looking music player for the terminal. Linux and Omarchy first.
 - **ReplayGain.** Uses track or album gain from tags. Files without tags are measured (EBU R128) in the background.
 - **Real format.** The audio line shows codec, bit depth and rate, e.g. `FLAC 24/96 → 48 kHz · gapless · RG −1.6 dB`. `→ 48 kHz` means PipeWire resamples. `bit-perfect` means it does not.
 - **Real album art** on Kitty and Ghostty. Half-blocks in other terminals.
-- Visualizer from the real audio, synced lyrics (`.lrc` or embedded), playlists (`.m3u8` import/export), search, smart lists.
+- Visualizer from the real audio, synced lyrics (`.lrc`, embedded, or looked up on [LRCLIB](https://lrclib.net) when you press `ctrl+l`; found lyrics are cached, or saved next to the song if you turn that on in Settings → Library), playlists (`.m3u8` import/export), search, smart lists.
 - 22 themes plus **Match Omarchy**, which follows your Omarchy theme live. Every theme passes a contrast test.
 - Media keys and `playerctl` (MPRIS). A module for the Omarchy bar or Waybar.
 - Every setting is in the app. Every key can be changed.
@@ -80,6 +80,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `R` / `E` | rename / export playlist |
 | `L` | like |
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
+| `ctrl+l` | find lyrics online (LRCLIB), only when you press it |
 | `[` / `]` | lyrics 0.5 s earlier / later (saved per song) |
 | `ctrl+t` | sleep timer (minutes, end of song, end of album) |
 | `ctrl+r` | rescan music folders |

@@ -272,7 +272,11 @@ impl Source for LocalSource {
 
     fn lyrics(&self, r: &TrackRef) -> Result<Option<Lyrics>> {
         let p = Path::new(&r.id);
-        let text = std::fs::read_to_string(p.with_extension("lrc")).ok().or_else(|| tags::embedded_lyrics(p));
+        // Next to the song, then in the tags, then lyrics found online earlier.
+        let text = std::fs::read_to_string(p.with_extension("lrc"))
+            .ok()
+            .or_else(|| tags::embedded_lyrics(p))
+            .or_else(|| std::fs::read_to_string(crate::library::lrclib::cache_file(&r.id)).ok());
         Ok(text.map(|t| lrc::parse(&t)).filter(|l| !l.is_empty()))
     }
 }
