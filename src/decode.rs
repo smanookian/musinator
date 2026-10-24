@@ -313,7 +313,10 @@ fn parse_elst(b: &[u8], movie_ts: u32, media_ts: u32) -> Option<Mp4Gapless> {
         if media_time < 0 {
             continue; // empty edit
         }
-        let frames = (dur as u128 * media_ts as u128 / movie_ts.max(1) as u128) as u64;
+        // Older ffmpeg writes the movie timescale in ms, so this can be off by up to
+        // half a millisecond; iTunes files carry the exact length in iTunSMPB instead.
+        let movie_ts = movie_ts.max(1) as u128;
+        let frames = ((dur as u128 * media_ts as u128 + movie_ts / 2) / movie_ts) as u64;
         if frames == 0 {
             return None;
         }

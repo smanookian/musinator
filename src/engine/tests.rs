@@ -206,7 +206,8 @@ fn gapless_every_format() {
         ("flac", &["flac", "-c:a", "flac"], 44_100, &p44, 75.0),
         ("alac", &["m4a", "-c:a", "alac"], 44_100, &p44, 75.0),
         ("mp3", &["mp3", "-c:a", "libmp3lame", "-b:a", "256k"], 44_100, &p44, 30.0),
-        ("aac", &["m4a", "-c:a", "aac", "-b:a", "256k"], 44_100, &p44, 30.0),
+        // Sample-exact edit list on every ffmpeg version (old ones default to ms).
+        ("aac", &["m4a", "-c:a", "aac", "-b:a", "256k", "-movie_timescale", "44100"], 44_100, &p44, 30.0),
         ("vorbis", &["ogg", "-c:a", "libvorbis", "-q:a", "6"], 44_100, &p44, 30.0),
         ("opus", &["opus", "-c:a", "libopus", "-b:a", "192k"], 48_000, &p48, 30.0),
     ];
