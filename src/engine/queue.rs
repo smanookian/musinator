@@ -104,6 +104,29 @@ impl Queue {
         start_id
     }
 
+    /// Put back a saved queue as it was (play order kept, no reshuffle).
+    pub fn restore(
+        &mut self,
+        items: Vec<(Arc<Track>, Option<String>)>,
+        current: Option<usize>,
+        shuffle: bool,
+        repeat: Repeat,
+    ) -> Option<u64> {
+        self.items = items
+            .into_iter()
+            .map(|(track, from)| {
+                self.next_id += 1;
+                QueueItem { id: self.next_id, track, from }
+            })
+            .collect();
+        self.unshuffled.clear();
+        self.shuffle = shuffle;
+        self.repeat = repeat;
+        self.current = None;
+        self.changed();
+        current.and_then(|i| self.items.get(i)).map(|i| i.id)
+    }
+
     /// Add to the end (`a`).
     pub fn append(&mut self, tracks: Vec<Arc<Track>>, from: Option<String>) {
         let new = self.make(tracks, from);
@@ -260,6 +283,18 @@ mod tests {
         q.repeat = Repeat::One;
         assert_eq!(q.next_after(Some(last), true).unwrap().id, last);
         assert_eq!(q.next_after(Some(last), false).unwrap().track.title, "1");
+    }
+
+    #[test]
+    fn restore_keeps_order_labels_and_modes() {
+        let mut q = Queue::new();
+        let items = vec![(t("b"), Some("Mix".into())), (t("a"), None), (t("c"), Some("Mix".into()))];
+        let id = q.restore(items, Some(1), true, Repeat::All).unwrap();
+        assert_eq!(titles(&q), ["b", "a", "c"]);
+        assert_eq!(q.get(id).unwrap().track.title, "a");
+        assert_eq!(q.items()[2].from.as_deref(), Some("Mix"));
+        assert!(q.shuffle);
+        assert_eq!(q.repeat, Repeat::All);
     }
 
     #[test]

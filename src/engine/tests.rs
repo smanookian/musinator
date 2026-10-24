@@ -262,3 +262,70 @@ fn replaygain_scales_the_samples() {
     let ratio_db = 20.0 * (loud / plain).log10();
     assert!((ratio_db + 3.0).abs() < 0.05, "applied {ratio_db:.2} dB");
 }
+
+/// Engine with a capture output and a queue of `files`, album names per file.
+fn engine_with(files: &[PathBuf], albums: &[&str]) -> (Engine, Arc<Mutex<Vec<f32>>>, u64) {
+    let src: Arc<dyn Source> = Arc::new(Files(Arc::from("files")));
+    let mut sources = Sources::default();
+    sources.add(src.clone());
+    let cap = Arc::new(Mutex::new(Vec::new()));
+    let cap2 = cap.clone();
+    let cfg = GainCfg { mode: RgMode::Off, ..Default::default() };
+    let engine = Engine::start_with(Arc::new(sources), 1.0, cfg, move |r, _| Ok(Box::new(Capture::start(r, cap2)))).unwrap();
+    let tracks: Vec<Arc<Track>> = files
+        .iter()
+        .zip(albums)
+        .map(|(p, a)| Arc::new(Track { r: Some(TrackRef::new(src.id(), p.to_string_lossy())), album: a.to_string(), ..Default::default() }))
+        .collect();
+    let first = engine.queue.lock().replace(tracks, None, 0).unwrap();
+    (engine, cap, first)
+}
+
+fn wait_stopped(engine: &Engine) {
+    let t0 = Instant::now();
+    let mut started = false;
+    loop {
+        match engine.events.recv_timeout(Duration::from_secs(20)) {
+            Ok(Event::State(PlayState::Playing)) => started = true,
+            Ok(Event::State(PlayState::Stopped)) if started => return,
+            Ok(Event::Error(e)) => panic!("engine error: {e}"),
+            Ok(_) => {}
+            Err(_) => panic!("timeout"),
+        }
+        assert!(t0.elapsed() < Duration::from_secs(60));
+    }
+}
+
+#[test]
+fn sleep_timer_stops_after_song_or_album() {
+    let dir = tempfile::tempdir().unwrap();
+    let pieces = [20_000, 21_000, 22_000];
+    let files = make_album(dir.path(), "st", &["flac", "-c:a", "flac"], 44_100, &pieces);
+
+    let (engine, cap, first) = engine_with(&files, &["A", "A", "A"]);
+    engine.send(Cmd::StopAfter(Some(StopAfter::Track)));
+    engine.send(Cmd::PlayItem(first));
+    wait_stopped(&engine);
+    drop(engine);
+    assert_eq!(cap.lock().len() / 2, 20_000, "end of song: only the first song plays");
+
+    let (engine, cap, first) = engine_with(&files, &["A", "A", "B"]);
+    engine.send(Cmd::StopAfter(Some(StopAfter::Album)));
+    engine.send(Cmd::PlayItem(first));
+    wait_stopped(&engine);
+    drop(engine);
+    assert_eq!(cap.lock().len() / 2, 41_000, "end of album: both songs of album A, not B");
+}
+
+#[test]
+fn cue_waits_paused_at_the_position() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = make_album(dir.path(), "cue", &["flac", "-c:a", "flac"], 44_100, &[44_100 * 4]);
+    let (engine, cap, first) = engine_with(&files, &["A"]);
+    engine.send(Cmd::Cue(first, Duration::from_millis(2500)));
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(engine.snapshot().state, PlayState::Paused);
+    assert!(cap.lock().iter().all(|s| *s == 0.0), "nothing may be heard while cued");
+    let pos = engine.position().as_secs_f64();
+    assert!((pos - 2.5).abs() < 0.01, "position {pos}");
+}

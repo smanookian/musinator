@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS playlist_items(
   title TEXT NOT NULL DEFAULT '', artist TEXT NOT NULL DEFAULT '', duration_ms INTEGER
 );
 CREATE INDEX IF NOT EXISTS pl_items ON playlist_items(playlist_id, pos);
+CREATE TABLE IF NOT EXISTS lyrics_offset(source TEXT NOT NULL, id TEXT NOT NULL, ms INTEGER NOT NULL, PRIMARY KEY(source, id));
 CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5(title, artist, album, genre, content='tracks', content_rowid='id');
 CREATE TRIGGER IF NOT EXISTS tracks_ai AFTER INSERT ON tracks BEGIN
   INSERT INTO tracks_fts(rowid, title, artist, album, genre) VALUES (new.id, new.title, new.artist || ' ' || new.album_artist, new.album, new.genre);
@@ -62,7 +63,8 @@ END;
 "#;
 
 pub const TRACK_COLS: &str = "t.id, t.path, t.title, t.artist, t.album_artist, t.album, t.year, t.track_no, t.track_total, t.disc_no, t.genre, \
-t.duration_ms, t.codec, t.sample_rate, t.bits, t.channels, t.bitrate, t.rg_track, t.rg_track_peak, t.rg_album, t.rg_album_peak, t.gain_origin, t.art";
+t.duration_ms, t.codec, t.sample_rate, t.bits, t.channels, t.bitrate, t.rg_track, t.rg_track_peak, t.rg_album, t.rg_album_peak, t.gain_origin, t.art, \
+(SELECT s2.rating FROM stats s2 WHERE s2.source = 'local' AND s2.id = t.path)";
 
 pub fn open(path: &Path) -> Result<Connection> {
     if let Some(d) = path.parent() {
@@ -180,6 +182,7 @@ pub fn track_from_row(src: &SourceId, r: &Row) -> rusqlite::Result<Track> {
             },
         },
         art,
+        rating: r.get::<_, Option<i64>>(23)?.filter(|v| (1..=5).contains(v)).map(|v| v as u8),
         r: Some(TrackRef { source: src.clone(), id: path }),
     })
 }
@@ -203,6 +206,32 @@ pub fn record_play(c: &Connection, source: &str, id: &str) -> Result<()> {
          ON CONFLICT(source, id) DO UPDATE SET play_count = play_count + 1, last_played = excluded.last_played",
         params![source, id, now()],
     )?;
+    Ok(())
+}
+
+/// 1..=5 stars, or None to clear.
+pub fn set_rating(c: &Connection, source: &str, id: &str, rating: Option<u8>) -> Result<()> {
+    c.execute(
+        "INSERT INTO stats(source, id, rating) VALUES (?1, ?2, ?3) ON CONFLICT(source, id) DO UPDATE SET rating = excluded.rating",
+        params![source, id, rating],
+    )?;
+    Ok(())
+}
+
+/// Per-song lyrics offset in ms (positive = lyrics later).
+pub fn lyrics_offset(c: &Connection, source: &str, id: &str) -> i64 {
+    c.query_row("SELECT ms FROM lyrics_offset WHERE source=?1 AND id=?2", params![source, id], |r| r.get(0)).unwrap_or(0)
+}
+
+pub fn set_lyrics_offset(c: &Connection, source: &str, id: &str, ms: i64) -> Result<()> {
+    if ms == 0 {
+        c.execute("DELETE FROM lyrics_offset WHERE source=?1 AND id=?2", params![source, id])?;
+    } else {
+        c.execute(
+            "INSERT INTO lyrics_offset(source, id, ms) VALUES (?1, ?2, ?3) ON CONFLICT(source, id) DO UPDATE SET ms = excluded.ms",
+            params![source, id, ms],
+        )?;
+    }
     Ok(())
 }
 
@@ -331,4 +360,28 @@ pub fn set_measured_album(c: &Connection, album_key: &str) -> Result<()> {
         c.execute("UPDATE tracks SET rg_album=?2, rg_album_peak=?3 WHERE album_key=?1", params![album_key, album, peak])?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ratings_and_lyrics_offsets_persist() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = open(&dir.path().join("t.db")).unwrap();
+        let row = TrackRow { path: "/m/a.flac".into(), folder: "/m".into(), title: "A".into(), codec: "FLAC".into(), ..Default::default() };
+        upsert(&c, &row, None, 0, 0).unwrap();
+        let src: SourceId = Arc::from("local");
+        assert_eq!(track_by_path(&c, &src, "/m/a.flac").unwrap().unwrap().rating, None);
+        set_rating(&c, "local", "/m/a.flac", Some(4)).unwrap();
+        assert_eq!(track_by_path(&c, &src, "/m/a.flac").unwrap().unwrap().rating, Some(4));
+        set_rating(&c, "local", "/m/a.flac", None).unwrap();
+        assert_eq!(track_by_path(&c, &src, "/m/a.flac").unwrap().unwrap().rating, None);
+        assert_eq!(lyrics_offset(&c, "local", "/m/a.flac"), 0);
+        set_lyrics_offset(&c, "local", "/m/a.flac", -1500).unwrap();
+        assert_eq!(lyrics_offset(&c, "local", "/m/a.flac"), -1500);
+        set_lyrics_offset(&c, "local", "/m/a.flac", 0).unwrap();
+        assert_eq!(lyrics_offset(&c, "local", "/m/a.flac"), 0);
+    }
 }

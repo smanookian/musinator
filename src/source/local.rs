@@ -2,7 +2,7 @@
 //!
 //! Browse node ids: `artists`, `artist:<name>`, `albums`, `album:<key>`, `tracks`,
 //! `genres`, `genre:<name>`, `folders`, `folder:<path>`, `playlist:<id>`,
-//! `smart:most`, `smart:never`, `smart:week`, `smart:liked`.
+//! `smart:most`, `smart:never`, `smart:week`, `smart:liked`, `smart:rated`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -183,6 +183,11 @@ impl Source for LocalSource {
                 "liked" => self.tracks(
                     &c,
                     "JOIN stats s ON s.source = 'local' AND s.id = t.path WHERE s.liked = 1 ORDER BY lower(t.artist), lower(t.album), t.disc_no, t.track_no",
+                    [],
+                )?,
+                "rated" => self.tracks(
+                    &c,
+                    "JOIN stats s ON s.source = 'local' AND s.id = t.path WHERE s.rating >= 1 ORDER BY s.rating DESC, lower(t.artist), lower(t.album), t.track_no",
                     [],
                 )?,
                 "week" => self.tracks(&c, "WHERE t.added_at >= ?1 ORDER BY t.added_at DESC, lower(t.album), t.disc_no, t.track_no", [week])?,

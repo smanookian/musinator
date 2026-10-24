@@ -21,20 +21,61 @@ pub enum Then {
 }
 
 pub enum Job {
-    Children { seq: u64, node: String },
-    Search { seq: u64, query: String },
-    Lyrics { track: TrackRef },
-    Tracks { nodes: Vec<String>, tracks: Vec<Arc<Track>>, then: Then },
+    Children {
+        seq: u64,
+        node: String,
+    },
+    Search {
+        seq: u64,
+        query: String,
+    },
+    Lyrics {
+        track: TrackRef,
+    },
+    Tracks {
+        nodes: Vec<String>,
+        tracks: Vec<Arc<Track>>,
+        then: Then,
+    },
     RecordPlay(TrackRef),
+    Rate {
+        track: TrackRef,
+        rating: Option<u8>,
+    },
+    LyricsOffset {
+        track: TrackRef,
+        ms: i64,
+    },
+    /// Resolve saved queue paths back to tracks (resume).
+    Restore(crate::app::session::Session),
     Like(TrackRef),
     Playlists,
-    NewPlaylist { name: String, nodes: Vec<String>, tracks: Vec<Arc<Track>> },
-    RenamePlaylist { id: i64, name: String },
+    NewPlaylist {
+        name: String,
+        nodes: Vec<String>,
+        tracks: Vec<Arc<Track>>,
+    },
+    RenamePlaylist {
+        id: i64,
+        name: String,
+    },
     DeletePlaylist(i64),
-    RemoveFromPlaylist { id: i64, pos: i64 },
-    MoveInPlaylist { id: i64, a: i64, b: i64 },
-    Export { id: i64, path: PathBuf },
-    Import { path: PathBuf },
+    RemoveFromPlaylist {
+        id: i64,
+        pos: i64,
+    },
+    MoveInPlaylist {
+        id: i64,
+        a: i64,
+        b: i64,
+    },
+    Export {
+        id: i64,
+        path: PathBuf,
+    },
+    Import {
+        path: PathBuf,
+    },
 }
 
 pub enum Msg {
@@ -49,7 +90,13 @@ pub enum Msg {
     Lyrics {
         track: TrackRef,
         lyrics: Option<Lyrics>,
+        offset: i64,
     },
+    Restored {
+        session: crate::app::session::Session,
+        tracks: Vec<Arc<Track>>,
+    },
+    Rated,
     Tracks {
         tracks: Vec<Arc<Track>>,
         then: Then,
@@ -115,7 +162,8 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
         Job::Search { seq, query } => send(Msg::Search { seq, hits: local.search(&query, 50).unwrap_or_default() }),
         Job::Lyrics { track } => {
             let lyrics = local.lyrics(&track).ok().flatten();
-            send(Msg::Lyrics { track, lyrics });
+            let offset = db::lyrics_offset(&local.conn(), &track.source, &track.id);
+            send(Msg::Lyrics { track, lyrics, offset });
         }
         Job::Tracks { nodes, mut tracks, then } => {
             for n in nodes {
@@ -140,6 +188,28 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
             if let Err(e) = db::record_play(&local.conn(), &r.source, &r.id) {
                 send(err(e));
             }
+        }
+        Job::Rate { track, rating } => match db::set_rating(&local.conn(), &track.source, &track.id, rating) {
+            Ok(()) => send(Msg::Rated),
+            Err(e) => send(err(e)),
+        },
+        Job::LyricsOffset { track, ms } => {
+            if let Err(e) = db::set_lyrics_offset(&local.conn(), &track.source, &track.id, ms) {
+                send(err(e));
+            }
+        }
+        Job::Restore(session) => {
+            let src = local.id().clone();
+            let tracks: Vec<Arc<Track>> = session
+                .items
+                .iter()
+                .filter(|i| std::path::Path::new(&i.path).exists())
+                .map(|i| {
+                    let r = TrackRef { source: src.clone(), id: i.path.clone() };
+                    Arc::new(local.track(&r).unwrap_or_else(|_| Track { r: Some(r), ..Default::default() }))
+                })
+                .collect();
+            send(Msg::Restored { session, tracks });
         }
         Job::Like(r) => match db::toggle_like(&local.conn(), &r.source, &r.id) {
             Ok(on) => send(Msg::Liked(on)),

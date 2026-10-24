@@ -307,12 +307,13 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
         app.hit.rows.push((y, i));
         let sel = i == cursor;
         let is_playing = matches!(it, Item::Track(tr) if tr.r.is_some() && tr.r == playing);
-        row(buf, &t, Rect { y, height: 1, ..inner }, it, sel, focused, is_playing, album_view);
+        let rating = if let Item::Track(tr) = it { app.rating_of(tr) } else { None };
+        row(buf, &t, Rect { y, height: 1, ..inner }, it, sel, focused, is_playing, album_view, rating);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool, playing: bool, album_view: bool) {
+fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool, playing: bool, album_view: bool, rating: Option<u8>) {
     let bg = if sel { if focused { t.selection } else { t.selection_dim } } else { t.bg };
     if sel {
         fill(buf, r, bg);
@@ -344,7 +345,11 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
     match it {
         Item::Track(tr) => {
             let dur = tr.duration_ms.map(fmt_time).unwrap_or_default();
-            let dx = put_right(buf, right, r.y, &dur, 9, muted);
+            let mut dx = put_right(buf, right, r.y, &dur, 9, muted);
+            if let Some(n) = rating {
+                dx =
+                    put_right(buf, dx.saturating_sub(2), r.y, &super::stars(n), 5, base.fg(c(if sel { t.selection_fg } else { t.accent })));
+            }
             let avail = dx.saturating_sub(x + 2);
             if album_view {
                 let no = tr.track_no.map(|n| n.to_string()).unwrap_or_default();
@@ -727,6 +732,9 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
             None => format!("track {n}"),
         });
     }
+    if let Some(n) = app.rating_of(&track) {
+        meta.push(super::stars(n));
+    }
     put(buf, x, y, &meta.join(" · "), w, Style::default().fg(c(t.muted)));
     y += 1;
     put_spans(buf, x, y, &audio_info(app), x + w);
@@ -867,6 +875,9 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
             s.push_str(&format!(" · scanning {d}/{n}"));
         } else if let Some((d, n)) = app.loudness {
             s.push_str(&format!(" · measuring loudness {}%", d * 100 / n.max(1)));
+        }
+        if let Some(l) = app.sleep_label() {
+            s.push_str(&format!(" · {l}"));
         }
         (format!(" {s}"), t.fg)
     };

@@ -16,6 +16,7 @@ A modern-looking music player for the terminal. Linux and Omarchy first.
 - 22 themes plus **Match Omarchy**, which follows your Omarchy theme live. Every theme passes a contrast test.
 - Media keys and `playerctl` (MPRIS). A module for the Omarchy bar or Waybar.
 - Every setting is in the app. Every key can be changed.
+- Star ratings, a sleep timer, and it resumes the queue and position where you left off (paused).
 - Light: about 0% CPU when idle, under 1% while playing with the visualizer.
 
 ## Install
@@ -78,6 +79,9 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `P` / `N` | add to playlist / new playlist |
 | `R` / `E` | rename / export playlist |
 | `L` | like |
+| `1`–`5` / `0` | rate 1–5 stars / clear rating |
+| `[` / `]` | lyrics 0.5 s earlier / later (saved per song) |
+| `ctrl+t` | sleep timer (minutes, end of song, end of album) |
 | `ctrl+r` | rescan music folders |
 | `Q` or `ctrl+c` | quit (asks first; turn that off in Settings → Playback) |
 

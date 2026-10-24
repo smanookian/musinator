@@ -16,6 +16,8 @@ pub struct Config {
     pub density: String,
     pub corners: String,
     pub shadow: bool,
+    pub term_colors: bool,
+    pub resume: bool,
     pub images: String,
     pub album_grid: bool,
     pub visualizer: bool,
@@ -47,6 +49,8 @@ impl Default for Config {
             density: "compact".into(),
             corners: "round".into(),
             shadow: true,
+            term_colors: true,
+            resume: true,
             images: "auto".into(),
             album_grid: false,
             visualizer: true,
@@ -169,6 +173,13 @@ pub const SETTINGS: &[Setting] = &[
     s!("corners", "Appearance", "Pane corners", "Round or square pane corners.", Kind::Choice(&[("round", "Round"), ("square", "Square")])),
     s!("shadow", "Appearance", "Dialog shadow", "Soft shadow under floating dialogs.", Kind::Toggle),
     s!(
+        "term_colors",
+        "Appearance",
+        "Match terminal colors",
+        "Give the terminal the theme's background and text color while Musinator is open.",
+        Kind::Toggle
+    ),
+    s!(
         "images",
         "Appearance",
         "Album art",
@@ -186,6 +197,13 @@ pub const SETTINGS: &[Setting] = &[
     ),
     s!("lyrics", "Appearance", "Lyrics", "Show synced lyrics on Now Playing when a song has them.", Kind::Toggle),
     s!("confirm_quit", "Playback", "Confirm before quitting", "Ask before Musinator closes.", Kind::Toggle),
+    s!(
+        "resume",
+        "Playback",
+        "Resume where you left off",
+        "Bring back the queue and position when Musinator starts (paused).",
+        Kind::Toggle
+    ),
     s!("seek_small", "Playback", "Seek step", "Seconds for ← and →.", Kind::Number { min: 1.0, max: 30.0, step: 1.0, unit: "s" }),
     s!(
         "seek_big",
@@ -257,6 +275,8 @@ impl Config {
                 choice(key, &v).unwrap_or(v)
             }
             "shadow" => on(self.shadow),
+            "term_colors" => on(self.term_colors),
+            "resume" => on(self.resume),
             "album_grid" => on(self.album_grid),
             "visualizer" => on(self.visualizer),
             "lyrics" => on(self.lyrics),
@@ -291,6 +311,8 @@ impl Config {
     fn bool_mut(&mut self, key: &str) -> Option<&mut bool> {
         Some(match key {
             "shadow" => &mut self.shadow,
+            "term_colors" => &mut self.term_colors,
+            "resume" => &mut self.resume,
             "album_grid" => &mut self.album_grid,
             "visualizer" => &mut self.visualizer,
             "lyrics" => &mut self.lyrics,

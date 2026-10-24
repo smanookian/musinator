@@ -7,6 +7,7 @@
 pub mod art;
 pub mod dialogs;
 pub mod draw;
+pub mod session;
 pub mod viz;
 pub mod worker;
 
@@ -127,6 +128,13 @@ pub struct App {
     pub lyrics: Option<(TrackRef, Lyrics)>,
     pub viz: viz::Viz,
     pub status: Option<(String, bool, Instant)>,
+    /// Per-song lyrics offset for the playing song (ms, positive = later).
+    pub lyrics_offset: i64,
+    pub sleep: Option<Sleep>,
+    /// Ratings changed this session (lists may still hold old track copies).
+    pub ratings: std::collections::HashMap<TrackRef, Option<u8>>,
+    /// (bg, fg) last sent to the terminal with OSC 11/10.
+    term_colors: Option<(musinator_themes::Rgb, musinator_themes::Rgb)>,
     pub scan: Option<(usize, usize)>,
     pub loudness: Option<(usize, usize)>,
     pub library_size: usize,
@@ -244,9 +252,13 @@ impl App {
         }
         s.push(Side::Blank);
         s.push(Side::Header("Smart"));
-        for (l, n) in
-            [("Most played", "smart:most"), ("Never played", "smart:never"), ("Added this week", "smart:week"), ("Liked", "smart:liked")]
-        {
+        for (l, n) in [
+            ("Most played", "smart:most"),
+            ("Never played", "smart:never"),
+            ("Added this week", "smart:week"),
+            ("Liked", "smart:liked"),
+            ("Top rated", "smart:rated"),
+        ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         self.side = s;
@@ -704,6 +716,40 @@ impl App {
                     self.dialog = Some(Dialog::confirm(format!("Delete playlist \"{name}\"?"), dialogs::Confirm::DeletePlaylist(id)));
                 }
             }
+            Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
+            Action::LyricsEarlier | Action::LyricsLater => {
+                let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {
+                    self.info("No lyrics for this song");
+                    return;
+                };
+                self.lyrics_offset += if a == Action::LyricsLater { 500 } else { -500 };
+                self.worker.send(Job::LyricsOffset { track: r, ms: self.lyrics_offset });
+                self.info(format!("Lyrics offset {:+.1} s", self.lyrics_offset as f64 / 1000.0));
+            }
+            Action::Rate1 | Action::Rate2 | Action::Rate3 | Action::Rate4 | Action::Rate5 | Action::RateClear => {
+                let rating = match a {
+                    Action::Rate1 => Some(1),
+                    Action::Rate2 => Some(2),
+                    Action::Rate3 => Some(3),
+                    Action::Rate4 => Some(4),
+                    Action::Rate5 => Some(5),
+                    _ => None,
+                };
+                let track = match self.targets() {
+                    Some((_, tracks, _)) if tracks.len() == 1 => tracks[0].clone(),
+                    _ => {
+                        self.info("Select a song to rate");
+                        return;
+                    }
+                };
+                let r = track.tref().clone();
+                self.ratings.insert(r.clone(), rating);
+                self.worker.send(Job::Rate { track: r, rating });
+                self.info(match rating {
+                    Some(n) => format!("{} {}", stars(n), track.display_title()),
+                    None => "Rating cleared".into(),
+                });
+            }
             Action::Like => {
                 if let Some((_, tracks, _)) = self.targets()
                     && let Some(t) = tracks.first()
@@ -886,6 +932,10 @@ impl App {
                 self.mpris_update();
             }
             EngineEvent::State(s) => {
+                if s == PlayState::Stopped && matches!(self.sleep, Some(Sleep::Track | Sleep::Album)) {
+                    self.sleep = None;
+                    self.info("Sleep timer: stopped");
+                }
                 if s == PlayState::Stopped {
                     self.engine.tap.enabled.store(false, std::sync::atomic::Ordering::Relaxed);
                 }
@@ -954,7 +1004,16 @@ impl App {
                     self.search_hits = hits;
                 }
             }
-            Msg::Lyrics { track, lyrics } => self.lyrics = lyrics.map(|l| (track, l)),
+            Msg::Lyrics { track, lyrics, offset } => {
+                self.lyrics_offset = offset;
+                self.lyrics = lyrics.map(|l| (track, l));
+            }
+            Msg::Restored { session, tracks } => self.restore(session, tracks),
+            Msg::Rated => {
+                if let Some(node) = self.list().map(|v| v.node.clone()).filter(|n| n.starts_with("smart:")) {
+                    self.reload_lists_matching(&node);
+                }
+            }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
             Msg::Playlists(p) => {
                 self.playlists = p;
@@ -1075,6 +1134,9 @@ impl App {
         } else if self.viz.bars.iter().any(|b| *b > 0.0) && self.viz_area.area() > 0 {
             want(Duration::from_millis(33));
         }
+        if let Some(Sleep::At(t)) = self.sleep {
+            want(t.saturating_duration_since(Instant::now()).max(Duration::from_millis(50)).min(Duration::from_secs(30)));
+        }
         if let Some((_, _, t)) = &self.status {
             let left = Duration::from_secs(4).saturating_sub(t.elapsed());
             want(left.max(Duration::from_millis(50)));
@@ -1086,6 +1148,13 @@ impl App {
     }
 
     fn on_tick(&mut self) {
+        if let Some(Sleep::At(t)) = self.sleep
+            && Instant::now() >= t
+        {
+            self.sleep = None;
+            self.engine.send(Cmd::Pause);
+            self.info("Sleep timer: paused");
+        }
         if self.status.as_ref().is_some_and(|(_, _, t)| t.elapsed() >= Duration::from_secs(4)) {
             self.status = None;
         }
@@ -1140,7 +1209,7 @@ impl App {
         if t.r.as_ref() != Some(r) {
             return None;
         }
-        let ms = self.engine.position().as_millis() as u64;
+        let ms = (self.engine.position().as_millis() as i64 - self.lyrics_offset).max(0) as u64;
         Some((l, lrc::current(l, ms)))
     }
 
@@ -1257,6 +1326,10 @@ pub fn run(cfg: Config) -> Result<()> {
         search_seq: 0,
         mpris,
         preview_theme: None,
+        lyrics_offset: 0,
+        sleep: None,
+        ratings: Default::default(),
+        term_colors: None,
         kitty_ok,
         art_tx: a_tx,
     };
@@ -1270,10 +1343,16 @@ pub fn run(cfg: Config) -> Result<()> {
         lib.watch();
     }
     crate::bar::sync(app.cfg.omarchy_bar);
+    if app.cfg.resume
+        && let Some(s) = session::load()
+    {
+        app.worker.send(Job::Restore(s));
+    }
 
     let res = (|| -> Result<()> {
         loop {
             if app.dirty {
+                app.sync_term_colors();
                 terminal.draw(|f| draw::draw(f, &mut app))?;
                 app.dirty = false;
             }
@@ -1304,7 +1383,9 @@ pub fn run(cfg: Config) -> Result<()> {
     })();
     crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture).ok();
     ratatui::restore();
+    app.reset_term_colors();
     let _ = app.cfg.save();
+    app.save_session();
     app.engine.send(Cmd::Stop);
     ipc::cleanup();
     res
@@ -1358,4 +1439,121 @@ fn watch_omarchy(tx: cb::Sender<()>) -> Option<notify::RecommendedWatcher> {
         let _ = w.watch(&p, RecursiveMode::NonRecursive);
     }
     Some(w)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sleep {
+    At(Instant),
+    Track,
+    Album,
+}
+
+pub fn stars(n: u8) -> String {
+    (0..5).map(|i| if i < n { '★' } else { '☆' }).collect()
+}
+
+impl App {
+    /// Rating to show for a track (this session's changes win).
+    pub fn rating_of(&self, t: &Track) -> Option<u8> {
+        match t.r.as_ref().and_then(|r| self.ratings.get(r)) {
+            Some(r) => *r,
+            None => t.rating,
+        }
+    }
+
+    pub fn set_sleep(&mut self, s: Option<Sleep>) {
+        self.sleep = s;
+        let stop = match s {
+            Some(Sleep::Track) => Some(crate::engine::StopAfter::Track),
+            Some(Sleep::Album) => Some(crate::engine::StopAfter::Album),
+            _ => None,
+        };
+        self.engine.send(Cmd::StopAfter(stop));
+        self.info(match s {
+            None => "Sleep timer off".to_string(),
+            Some(Sleep::At(t)) => format!("Sleep in {} min", t.saturating_duration_since(Instant::now()).as_secs().div_ceil(60)),
+            Some(Sleep::Track) => "Stop at the end of this song".into(),
+            Some(Sleep::Album) => "Stop at the end of this album".into(),
+        });
+    }
+
+    /// Short text for the status bar.
+    pub fn sleep_label(&self) -> Option<String> {
+        Some(match self.sleep? {
+            Sleep::At(t) => format!("sleep {}m", t.saturating_duration_since(Instant::now()).as_secs().div_ceil(60)),
+            Sleep::Track => "sleep: end of song".into(),
+            Sleep::Album => "sleep: end of album".into(),
+        })
+    }
+
+    fn save_session(&self) {
+        if !self.cfg.resume {
+            session::clear();
+            return;
+        }
+        let q = self.engine.queue.lock();
+        let s = session::Session {
+            items: q
+                .items()
+                .iter()
+                .filter_map(|i| Some(session::Item { path: i.track.r.as_ref()?.id.clone(), from: i.from.clone() }))
+                .collect(),
+            current: q.current().and_then(|i| i.track.r.as_ref().map(|r| r.id.clone())),
+            position_ms: self.engine.position().as_millis() as u64,
+            shuffle: q.shuffle,
+            repeat: q.repeat.label().into(),
+        };
+        drop(q);
+        let _ = session::save(&s);
+    }
+
+    fn restore(&mut self, s: session::Session, tracks: Vec<Arc<Track>>) {
+        if tracks.is_empty() || !self.engine.queue.lock().is_empty() {
+            return;
+        }
+        let from: std::collections::HashMap<&str, Option<String>> = s.items.iter().map(|i| (i.path.as_str(), i.from.clone())).collect();
+        let cur = s.current.as_deref().and_then(|c| tracks.iter().position(|t| t.r.as_ref().is_some_and(|r| r.id == c)));
+        let items = tracks.iter().map(|t| (t.clone(), t.r.as_ref().and_then(|r| from.get(r.id.as_str()).cloned().flatten()))).collect();
+        let repeat = match s.repeat.as_str() {
+            "all" => crate::model::Repeat::All,
+            "one" => crate::model::Repeat::One,
+            _ => crate::model::Repeat::Off,
+        };
+        let id = self.engine.queue.lock().restore(items, cur, s.shuffle, repeat);
+        if let Some(id) = id {
+            self.engine.send(Cmd::Cue(id, Duration::from_millis(s.position_ms)));
+        }
+        self.after_queue_edit();
+        self.info(format!("Resumed: {} in queue", tracks.len()));
+    }
+
+    /// Give the terminal our background and text color (OSC 11 / OSC 10).
+    fn sync_term_colors(&mut self) {
+        use std::io::Write;
+        let want = self.cfg.term_colors.then_some((self.theme.bg, self.theme.fg));
+        if want == self.term_colors {
+            return;
+        }
+        let mut out = std::io::stdout();
+        match want {
+            Some((bg, fg)) => {
+                let _ = write!(out, "\x1b]11;{}\x07\x1b]10;{}\x07", bg.to_hex(), fg.to_hex());
+            }
+            None => {
+                let _ = write!(out, "\x1b]111\x07\x1b]110\x07");
+            }
+        }
+        let _ = out.flush();
+        self.term_colors = want;
+    }
+
+    /// Put the terminal's own colors back.
+    fn reset_term_colors(&mut self) {
+        use std::io::Write;
+        if self.term_colors.take().is_some() {
+            let mut out = std::io::stdout();
+            let _ = write!(out, "\x1b]111\x07\x1b]110\x07");
+            let _ = out.flush();
+        }
+    }
 }

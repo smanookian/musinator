@@ -100,6 +100,8 @@ pub struct Track {
     pub format: Option<AudioFormat>,
     pub gain: Gain,
     pub art: Option<ArtRef>,
+    /// 1..=5 stars.
+    pub rating: Option<u8>,
 }
 
 impl Track {

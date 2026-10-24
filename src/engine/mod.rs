@@ -62,6 +62,12 @@ impl PlayState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StopAfter {
+    Track,
+    Album,
+}
+
 pub enum Cmd {
     /// Play this queue item from the start.
     PlayItem(u64),
@@ -78,6 +84,10 @@ pub enum Cmd {
     Gain(GainCfg),
     /// Reconnect the audio output (e.g. after PipeWire's allowed rates changed).
     ReopenOutput,
+    /// Load this item paused at a position (resume after restart).
+    Cue(u64, Duration),
+    /// Stop when the current track or album ends (sleep timer). None cancels.
+    StopAfter(Option<StopAfter>),
     Quit,
 }
 
@@ -177,6 +187,7 @@ impl Engine {
             gain,
             listen_start: None,
             listened: Duration::ZERO,
+            stop_after: None,
         };
         let thread = std::thread::Builder::new().name("engine".into()).spawn(move || w.run())?;
         Ok(Engine { tx, events, queue, tap, shared, snap, audible, thread: Some(thread) })
@@ -291,6 +302,7 @@ struct Worker {
     gain: GainCfg,
     listen_start: Option<Instant>,
     listened: Duration,
+    stop_after: Option<StopAfter>,
 }
 
 impl Worker {
@@ -421,6 +433,17 @@ impl Worker {
                     }
                 }
             }
+            Cmd::Cue(id, at) => {
+                self.start_item(id, at);
+                if self.state == PlayState::Playing {
+                    // Nothing has been heard yet: go silent at once.
+                    self.shared.paused.store(true, Release);
+                    self.output.set_active(false);
+                    self.active = false;
+                    self.set_state(PlayState::Paused);
+                }
+            }
+            Cmd::StopAfter(s) => self.stop_after = s,
             Cmd::Quit => {}
         }
     }
@@ -712,6 +735,21 @@ impl Worker {
     /// The decode head reached the end of a track: chain the next one.
     fn advance(&mut self) {
         let Some(done) = self.dec.take() else { return };
+        match self.stop_after {
+            Some(StopAfter::Track) => {
+                self.stop_after = None;
+                return;
+            }
+            Some(StopAfter::Album) => {
+                let key = |t: &Track| (if t.album_artist.is_empty() { t.artist.clone() } else { t.album_artist.clone() }, t.album.clone());
+                let next = self.queue.lock().next_after(Some(done.item_id), true).map(|i| key(&i.track));
+                if next != Some(key(&done.track)) {
+                    self.stop_after = None;
+                    return;
+                }
+            }
+            None => {}
+        }
         let mut after = Some(done.item_id);
         let mut tries = self.queue.lock().len();
         let mut auto = true;

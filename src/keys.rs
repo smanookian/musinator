@@ -51,6 +51,15 @@ pub enum Action {
     RenamePlaylist,
     ExportPlaylist,
     ClearQueue,
+    SleepTimer,
+    LyricsEarlier,
+    LyricsLater,
+    Rate1,
+    Rate2,
+    Rate3,
+    Rate4,
+    Rate5,
+    RateClear,
     Quit,
 }
 
@@ -81,6 +90,7 @@ actions! {
     VolDown "vol_down" "Playback" "Volume down" ["-"];
     Shuffle "shuffle" "Playback" "Shuffle on / off" ["s"];
     Repeat "repeat" "Playback" "Repeat: off, all, one" ["r"];
+    SleepTimer "sleep_timer" "Playback" "Sleep timer" ["ctrl+t"];
     AddQueue "add_queue" "Queue" "Add to queue" ["a"];
     PlayNext "play_next" "Queue" "Play next" ["A"];
     MoveDown "move_down" "Queue" "Move item down" ["J"];
@@ -90,6 +100,12 @@ actions! {
     ClearQueue "clear_queue" "Queue" "Clear queue" ["X"];
     Search "search" "Find" "Search everything" ["/"];
     Like "like" "Library" "Like / unlike" ["L"];
+    Rate1 "rate_1" "Library" "Rate 1 star" ["1"];
+    Rate2 "rate_2" "Library" "Rate 2 stars" ["2"];
+    Rate3 "rate_3" "Library" "Rate 3 stars" ["3"];
+    Rate4 "rate_4" "Library" "Rate 4 stars" ["4"];
+    Rate5 "rate_5" "Library" "Rate 5 stars" ["5"];
+    RateClear "rate_clear" "Library" "Clear rating" ["0"];
     AddToPlaylist "add_to_playlist" "Library" "Add to playlist" ["P"];
     NewPlaylist "new_playlist" "Library" "New playlist" ["N"];
     RenamePlaylist "rename_playlist" "Library" "Rename playlist" ["R"];
@@ -99,6 +115,8 @@ actions! {
     ToggleScreen "toggle_screen" "Screens" "Library ↔ Now Playing" ["z"];
     Lyrics "lyrics" "Screens" "Lyrics on / off" ["l"];
     Visualizer "visualizer" "Screens" "Visualizer on / off" ["v"];
+    LyricsEarlier "lyrics_earlier" "Screens" "Lyrics 0.5 s earlier" ["["];
+    LyricsLater "lyrics_later" "Screens" "Lyrics 0.5 s later" ["]"];
     Themes "themes" "Screens" "Themes" ["t"];
     Settings "settings" "Screens" "Settings" ["S"];
     Help "help" "Screens" "Help" ["?"];

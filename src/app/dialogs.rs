@@ -22,6 +22,18 @@ use crate::library::db::Playlist;
 use crate::model::{Track, fmt_time};
 use crate::source::{Item, Node, NodeKind};
 
+/// Sleep timer choices: label, minutes (0 = off, -1 = end of song, -2 = end of album).
+const SLEEP: &[(&str, i32)] = &[
+    ("Off", 0),
+    ("15 minutes", 15),
+    ("30 minutes", 30),
+    ("45 minutes", 45),
+    ("60 minutes", 60),
+    ("90 minutes", 90),
+    ("End of this song", -1),
+    ("End of this album", -2),
+];
+
 pub enum Confirm {
     DeletePlaylist(i64),
 }
@@ -44,6 +56,7 @@ pub enum Dialog {
     Help { filter: String, offset: usize },
     Keys { cursor: usize, offset: usize, capture: bool, msg: Option<String> },
     Folders { cursor: usize, changed: bool },
+    Sleep { cursor: usize },
     Input { title: &'static str, label: &'static str, value: String, what: InputFor },
     PlaylistPick { nodes: Vec<String>, tracks: Vec<Arc<Track>>, entries: Vec<(Option<i64>, String)>, cursor: usize },
 }
@@ -57,6 +70,15 @@ impl Dialog {
     }
     pub fn search() -> Self {
         Dialog::Search { input: String::new(), cursor: 0, offset: 0, typed: None }
+    }
+    pub fn sleep(app: &App) -> Self {
+        let cursor = match app.sleep {
+            None => 0,
+            Some(super::Sleep::At(_)) => 3,
+            Some(super::Sleep::Track) => SLEEP.len() - 2,
+            Some(super::Sleep::Album) => SLEEP.len() - 1,
+        };
+        Dialog::Sleep { cursor }
     }
     pub fn settings() -> Self {
         Dialog::Settings { section: 0, row: 0, right: true }
@@ -331,6 +353,25 @@ impl Dialog {
                 edit(value, &k);
                 true
             }
+            Dialog::Sleep { cursor } => {
+                match k.code {
+                    _ if esc => return false,
+                    KeyCode::Down | KeyCode::Char('j') => *cursor = (*cursor + 1).min(SLEEP.len() - 1),
+                    KeyCode::Up | KeyCode::Char('k') => *cursor = cursor.saturating_sub(1),
+                    KeyCode::Enter => {
+                        let s = match SLEEP[*cursor].1 {
+                            0 => None,
+                            -1 => Some(super::Sleep::Track),
+                            -2 => Some(super::Sleep::Album),
+                            m => Some(super::Sleep::At(Instant::now() + Duration::from_secs(m as u64 * 60))),
+                        };
+                        app.set_sleep(s);
+                        return false;
+                    }
+                    _ => {}
+                }
+                true
+            }
             Dialog::PlaylistPick { nodes, tracks, entries, cursor } => {
                 match k.code {
                     _ if esc => return false,
@@ -390,6 +431,17 @@ impl Dialog {
                 let shown = tail(value, field.width as usize - 2);
                 put(b, field.x + 1, field.y, &format!("{shown}▏"), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
                 hints_row(b, inner, "enter ok · esc cancel", muted);
+            }
+            Dialog::Sleep { cursor } => {
+                let inner = frame(f, app, 40, SLEEP.len() as u16 + 4, "Sleep timer");
+                for (k, (label, _)) in SLEEP.iter().enumerate() {
+                    sel_row(f, app, inner, inner.y + 1 + k as u16, label, k == *cursor);
+                }
+                let left = app
+                    .sleep_label()
+                    .map(|l| format!("now: {l} · enter set · esc close"))
+                    .unwrap_or_else(|| "enter set · esc close".into());
+                hints_row(f.buffer_mut(), inner, &left, muted);
             }
             Dialog::PlaylistPick { entries, cursor, .. } => {
                 let h = (entries.len() as u16 + 4).min(area.height - 4);
