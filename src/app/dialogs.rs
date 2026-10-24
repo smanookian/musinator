@@ -13,7 +13,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear};
 use unicode_width::UnicodeWidthStr;
 
 use super::draw::{c, fill, put, put_right};
-use super::worker::{Job, Then};
+use super::worker::{CoverJob, Job, Then};
 use super::{App, Focus, Screen, Side};
 use crate::config::{Kind, SECTIONS, SETTINGS};
 use crate::engine::Cmd;
@@ -64,6 +64,7 @@ pub enum Dialog {
 }
 
 /// The tag editor: one song, or many (then only shared fields are shown).
+/// The last row is the cover picture.
 pub struct TagEdit {
     paths: Vec<std::path::PathBuf>,
     orig: Fields,
@@ -73,26 +74,52 @@ pub struct TagEdit {
     touched: [bool; 8],
     row: usize,
     note: Option<String>,
+    /// What the songs have now, e.g. "600×600 JPEG inside the song".
+    cover_now: String,
+    folder_cover: Option<std::path::PathBuf>,
+    /// A picture file path typed by the user.
+    cover: String,
+    cover_remove: bool,
 }
 
 impl TagEdit {
     fn rows(&self) -> Vec<usize> {
-        if self.paths.len() == 1 { (0..8).collect() } else { tagedit::ALBUM_FIELDS.to_vec() }
+        let mut r: Vec<usize> = if self.paths.len() == 1 { (0..8).collect() } else { tagedit::ALBUM_FIELDS.to_vec() };
+        r.push(COVER_ROW);
+        r
     }
     /// What to write: only fields the user changed.
     fn changes(&self) -> [Option<String>; 8] {
         let mut out: [Option<String>; 8] = Default::default();
         for i in self.rows() {
-            if self.touched[i] && (self.mixed[i] || self.values[i].trim() != self.orig[i]) {
+            if i < 8 && self.touched[i] && (self.mixed[i] || self.values[i].trim() != self.orig[i]) {
                 out[i] = Some(self.values[i].trim().to_string());
             }
         }
         out
     }
+    fn cover_path(&self) -> Option<std::path::PathBuf> {
+        let v = self.cover.trim();
+        (!v.is_empty()).then(|| crate::config::expand(v))
+    }
+    /// Right-hand note for a typed picture path.
+    fn cover_check(&self) -> Option<(&'static str, bool)> {
+        let p = self.cover_path()?;
+        Some(if !p.is_file() {
+            ("not found", false)
+        } else if image::ImageReader::open(&p).ok().and_then(|r| r.with_guessed_format().ok()).is_some_and(|r| r.format().is_some()) {
+            ("✓ picture", true)
+        } else {
+            ("not a picture", false)
+        })
+    }
 }
 
+const COVER_ROW: usize = 8;
+
 impl Dialog {
-    pub fn tags(paths: Vec<std::path::PathBuf>, all: Vec<Fields>) -> Self {
+    pub fn tags(info: super::worker::EditInfo) -> Self {
+        let all = info.fields;
         let mut orig: Fields = all[0].clone();
         let mut mixed = [false; 8];
         for f in &all[1..] {
@@ -107,7 +134,29 @@ impl Dialog {
                 orig[i].clear();
             }
         }
-        let e = TagEdit { paths, values: orig.clone(), orig, mixed, touched: [false; 8], row: 0, note: None };
+        let n = info.covers.len();
+        let with = info.covers.iter().filter(|c| c.is_some()).count();
+        let folder = info.folder_cover.as_ref().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().into_owned());
+        let cover_now = match (with, &info.covers[0], folder) {
+            (0, _, Some(f)) => format!("none inside · {f} in the folder"),
+            (0, _, None) => "none".into(),
+            (w, Some(c), _) if w == n && info.covers.iter().all(|x| x.as_deref() == Some(c)) => format!("{c} inside"),
+            (w, _, _) if w == n => "inside every song (they differ)".into(),
+            (w, _, _) => format!("inside {w} of {n} songs"),
+        };
+        let e = TagEdit {
+            paths: info.paths,
+            values: orig.clone(),
+            orig,
+            mixed,
+            touched: [false; 8],
+            row: 0,
+            note: None,
+            cover_now,
+            folder_cover: info.folder_cover,
+            cover: String::new(),
+            cover_remove: false,
+        };
         Dialog::Tags(Box::new(e))
     }
     pub fn quit() -> Self {
@@ -422,6 +471,7 @@ impl Dialog {
             }
             Dialog::Tags(e) => {
                 let rows = e.rows();
+                let on_cover = rows[e.row] == COVER_ROW;
                 if esc {
                     return false;
                 }
@@ -430,32 +480,59 @@ impl Dialog {
                 } else if up {
                     e.row = (e.row + rows.len() - 1) % rows.len();
                 } else if k.code == KeyCode::Enter {
+                    let cover = if e.cover_remove {
+                        CoverJob::Remove
+                    } else if let Some(p) = e.cover_path() {
+                        if e.cover_check().is_some_and(|(_, ok)| !ok) {
+                            e.note = Some("The cover picture can't be used. Fix the path or clear it (ctrl+u).".into());
+                            return true;
+                        }
+                        CoverJob::Set(p)
+                    } else {
+                        CoverJob::Keep
+                    };
                     let fields = e.changes();
-                    if fields.iter().all(Option::is_none) {
+                    if fields.iter().all(Option::is_none) && matches!(cover, CoverJob::Keep) {
                         app.info("Nothing changed");
                     } else {
-                        app.send_job(Job::WriteTags { paths: std::mem::take(&mut e.paths), fields });
+                        app.send_job(Job::WriteTags { paths: std::mem::take(&mut e.paths), fields, cover });
                     }
                     return false;
                 } else if ctrl && k.code == KeyCode::Char('f') {
                     let guess = tagedit::from_filename(&e.paths[0]);
                     let mut n = 0;
                     for &i in &rows {
-                        if !guess[i].is_empty() && guess[i] != e.values[i] {
+                        if i < 8 && !guess[i].is_empty() && guess[i] != e.values[i] {
                             e.values[i] = guess[i].clone();
                             e.touched[i] = true;
                             n += 1;
                         }
+                    }
+                    // No picture inside the songs yet: use the folder's cover file.
+                    if e.cover_now.starts_with("none")
+                        && e.cover.is_empty()
+                        && let Some(p) = &e.folder_cover
+                    {
+                        e.cover = p.to_string_lossy().into_owned();
+                        n += 1;
                     }
                     e.note = Some(if n == 0 {
                         "Nothing new in the file name".into()
                     } else {
                         format!("Filled {n} from the file name · check, then enter to save")
                     });
+                } else if on_cover && ctrl && k.code == KeyCode::Char('x') {
+                    e.cover_remove = !e.cover_remove;
+                    e.cover.clear();
                 } else {
                     let i = rows[e.row];
-                    if edit(&mut e.values[i], &k) {
-                        e.touched[i] = true;
+                    let v = if i == COVER_ROW { &mut e.cover } else { &mut e.values[i] };
+                    if edit(v, &k) {
+                        if i == COVER_ROW {
+                            e.cover_remove = false;
+                        } else {
+                            e.touched[i] = true;
+                        }
                         e.note = None;
                     }
                 }
@@ -524,7 +601,7 @@ impl Dialog {
             Dialog::Tags(e) => {
                 let rows = e.rows();
                 let title = if e.paths.len() == 1 { "Edit tags".to_string() } else { format!("Edit tags · {} songs", e.paths.len()) };
-                let inner = frame(f, app, 72, rows.len() as u16 + 7, &title);
+                let inner = frame(f, app, 76, rows.len() as u16 + 8, &title);
                 let b = f.buffer_mut();
                 let what = if e.paths.len() == 1 {
                     e.paths[0].file_name().unwrap_or_default().to_string_lossy().into_owned()
@@ -535,31 +612,58 @@ impl Dialog {
                 let fx = inner.x + 17;
                 let fw = (inner.x + inner.width).saturating_sub(fx + 2);
                 for (k, &i) in rows.iter().enumerate() {
-                    let y = inner.y + 3 + k as u16;
+                    // A blank line between the tags and the cover.
+                    let y = inner.y + 3 + k as u16 + u16::from(i == COVER_ROW);
                     let sel = k == e.row;
-                    let changed = e.touched[i] && (e.mixed[i] || e.values[i].trim() != e.orig[i]);
-                    put(b, inner.x + 2, y, if changed { "•" } else { " " }, 1, Style::default().fg(c(t.warn)).bg(c(t.dialog_bg)));
-                    put(b, inner.x + 4, y, tagedit::FIELDS[i], 13, if sel { bold } else { muted });
                     let bg = if sel { t.title_bar } else { t.dialog_bg };
                     let field = Rect { x: fx, y, width: fw, height: 1 };
-                    fill(b, field, bg);
                     let st = Style::default().fg(c(t.fg)).bg(c(bg));
-                    if e.values[i].is_empty() && e.mixed[i] && !e.touched[i] {
-                        put(
-                            b,
-                            fx + 1,
-                            y,
-                            if sel { "▏(mixed)" } else { "(mixed)" },
-                            fw.saturating_sub(1),
-                            Style::default().fg(c(t.muted)).bg(c(bg)),
-                        );
+                    let dim = Style::default().fg(c(t.muted)).bg(c(bg));
+                    let cursor = if sel { "▏" } else { "" };
+                    let (label, changed) = if i == COVER_ROW {
+                        ("Cover", e.cover_remove || !e.cover.trim().is_empty())
+                    } else {
+                        (tagedit::FIELDS[i], e.touched[i] && (e.mixed[i] || e.values[i].trim() != e.orig[i]))
+                    };
+                    put(b, inner.x + 2, y, if changed { "•" } else { " " }, 1, Style::default().fg(c(t.warn)).bg(c(t.dialog_bg)));
+                    put(b, inner.x + 4, y, label, 13, if sel { bold } else { muted });
+                    fill(b, field, bg);
+                    if i == COVER_ROW {
+                        if e.cover_remove {
+                            put(
+                                b,
+                                fx + 1,
+                                y,
+                                &format!("{cursor}will be removed from the songs"),
+                                fw.saturating_sub(1),
+                                Style::default().fg(c(t.warn)).bg(c(bg)),
+                            );
+                        } else if e.cover.is_empty() {
+                            let hint = if sel { format!("{cursor}{} · type a picture path", e.cover_now) } else { e.cover_now.clone() };
+                            put(b, fx + 1, y, &hint, fw.saturating_sub(1), dim);
+                        } else {
+                            let (msg, ok) = e.cover_check().unwrap_or(("", true));
+                            let mw = msg.width() as u16;
+                            put_right(b, fx + fw - 1, y, msg, mw, Style::default().fg(c(if ok { t.good } else { t.warn })).bg(c(bg)));
+                            let room = fw.saturating_sub(mw + 3) as usize;
+                            put(b, fx + 1, y, &format!("{}{cursor}", tail(&e.cover, room)), room as u16 + 1, st);
+                        }
+                    } else if e.values[i].is_empty() && e.mixed[i] && !e.touched[i] {
+                        put(b, fx + 1, y, &format!("{cursor}(mixed)"), fw.saturating_sub(1), dim);
                     } else if sel {
                         put(b, fx + 1, y, &format!("{}▏", tail(&e.values[i], fw as usize - 2)), fw.saturating_sub(1), st);
                     } else {
                         put(b, fx + 1, y, &e.values[i], fw.saturating_sub(2), st);
                     }
                 }
-                let hint = e.note.clone().unwrap_or_else(|| "enter save · ctrl+f from file name · esc cancel".into());
+                let on_cover = rows[e.row] == COVER_ROW;
+                let hint = e.note.clone().unwrap_or_else(|| {
+                    if on_cover {
+                        "type a picture path (~ ok) · ctrl+x remove · enter save · esc cancel".into()
+                    } else {
+                        "enter save · ctrl+f from file name · esc cancel".into()
+                    }
+                });
                 hints_row(b, inner, &hint, muted);
             }
             Dialog::Sleep { cursor } => {

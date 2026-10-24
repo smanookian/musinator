@@ -266,7 +266,11 @@ impl Source for LocalSource {
 
     fn art(&self, a: &ArtRef) -> Result<Option<Vec<u8>>> {
         if let Some(p) = a.id.strip_prefix("embedded:") {
-            return Ok(tags::embedded_art(Path::new(p)));
+            // The picture may have been removed since the scan: use the folder's cover then.
+            let p = Path::new(p);
+            return Ok(
+                tags::embedded_art(p).or_else(|| p.parent().and_then(crate::library::folder_cover).and_then(|c| std::fs::read(c).ok()))
+            );
         }
         if let Some(p) = a.id.strip_prefix("file:") {
             return Ok(std::fs::read(p).ok());

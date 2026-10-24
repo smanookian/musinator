@@ -13,6 +13,24 @@ use crate::source::{Item, Lyrics, Page, SearchHits, Source};
 
 /// What to do with resolved tracks.
 #[derive(Clone, Debug)]
+/// Cover change from the tag editor.
+pub enum CoverJob {
+    Keep,
+    /// Embed this picture; for many songs also save it as `cover.jpg`/`.png` in their folders.
+    Set(std::path::PathBuf),
+    Remove,
+}
+
+/// What the tag editor needs to open.
+pub struct EditInfo {
+    pub paths: Vec<std::path::PathBuf>,
+    pub fields: Vec<crate::library::tagedit::Fields>,
+    /// Embedded front cover per song ("600×600 JPEG").
+    pub covers: Vec<Option<String>>,
+    /// A cover picture in the first song's folder.
+    pub folder_cover: Option<std::path::PathBuf>,
+}
+
 pub enum Then {
     Play { from: String },
     Queue { from: String },
@@ -42,6 +60,7 @@ pub enum Job {
     WriteTags {
         paths: Vec<std::path::PathBuf>,
         fields: [Option<String>; 8],
+        cover: CoverJob,
     },
     FetchLyrics {
         track: Arc<Track>,
@@ -89,10 +108,14 @@ pub enum Job {
 
 pub enum Msg {
     /// Tags read for the editor: file paths, each file's fields.
-    EditTags(Vec<std::path::PathBuf>, Vec<crate::library::tagedit::Fields>),
+    EditTags(Box<EditInfo>),
+    /// `arts`: pictures that changed (drop them from the caches).
     TagsSaved {
         ok: usize,
         failed: Vec<String>,
+        arts: Vec<crate::model::ArtRef>,
+        /// The edited songs (refreshed in the queue after the scan).
+        songs: Vec<crate::model::TrackRef>,
     },
     Children {
         seq: u64,
@@ -204,6 +227,9 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                         .filter(|t| &*t.tref().source == crate::source::local::ID)
                         .map(|t| std::path::PathBuf::from(&*t.tref().id))
                         .collect();
+                    if paths.is_empty() {
+                        return send(Msg::Error("No song files to edit here".into()));
+                    }
                     let mut fields = Vec::with_capacity(paths.len());
                     for p in &paths {
                         match crate::library::tagedit::read(p) {
@@ -211,24 +237,59 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                             Err(e) => return send(Msg::Error(format!("Can't read tags of {}: {e:#}", p.display()))),
                         }
                     }
-                    if paths.is_empty() {
-                        return send(Msg::Error("No song files to edit here".into()));
-                    }
-                    send(Msg::EditTags(paths, fields));
+                    let covers = paths.iter().map(|p| crate::library::tagedit::cover_info(p)).collect();
+                    let folder_cover = paths[0].parent().and_then(crate::library::folder_cover);
+                    send(Msg::EditTags(Box::new(EditInfo { paths, fields, covers, folder_cover })));
                 }
                 then => send(Msg::Tracks { tracks, then }),
             }
         }
-        Job::WriteTags { paths, fields } => {
+        Job::WriteTags { paths, fields, cover } => {
+            use crate::library::tagedit::{self, CoverEdit};
+            let edit = match &cover {
+                CoverJob::Keep => CoverEdit::Keep,
+                CoverJob::Remove => CoverEdit::Remove,
+                CoverJob::Set(p) => match tagedit::load_cover(p) {
+                    Ok(b) => CoverEdit::Set(b),
+                    Err(e) => return send(err(e)),
+                },
+            };
             let mut ok = 0;
             let mut failed = Vec::new();
+            let mut arts = Vec::new();
             for p in &paths {
-                match crate::library::tagedit::write(p, &fields) {
+                match tagedit::write(p, &fields, &edit) {
                     Ok(()) => ok += 1,
                     Err(e) => failed.push(format!("{}: {e:#}", p.file_name().unwrap_or_default().to_string_lossy())),
                 }
+                if !matches!(edit, CoverEdit::Keep) {
+                    arts.push(crate::model::ArtRef { source: crate::source::local::ID.into(), id: format!("embedded:{}", p.display()) });
+                }
             }
-            send(Msg::TagsSaved { ok, failed });
+            // A whole album: also keep a cover file in the folder for other apps.
+            if let CoverEdit::Set(b) = &edit
+                && paths.len() > 1
+            {
+                let dirs: std::collections::BTreeSet<_> = paths.iter().filter_map(|p| p.parent()).collect();
+                // Skip folders where the picture already is the cover file.
+                let src = match &cover {
+                    CoverJob::Set(p) => Some(p.as_path()),
+                    _ => None,
+                };
+                for d in dirs.into_iter().filter(|d| crate::library::folder_cover(d).as_deref() != src) {
+                    match tagedit::save_folder_cover(d, b) {
+                        Ok(f) => {
+                            arts.push(crate::model::ArtRef { source: crate::source::local::ID.into(), id: format!("file:{}", f.display()) })
+                        }
+                        Err(e) => failed.push(format!("{}: {e:#}", d.display())),
+                    }
+                }
+            }
+            let songs = paths
+                .iter()
+                .map(|p| crate::model::TrackRef { source: crate::source::local::ID.into(), id: p.to_string_lossy().into_owned() })
+                .collect();
+            send(Msg::TagsSaved { ok, failed, arts, songs });
         }
         Job::RecordPlay(r) => {
             if let Err(e) = db::record_play(&local.conn(), &r.source, &r.id) {

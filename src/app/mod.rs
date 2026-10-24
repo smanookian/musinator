@@ -125,6 +125,8 @@ pub struct App {
     pub images_on: bool,
     pub pics: Vec<(Slot, Pic)>,
     pub grid_pics: std::collections::HashMap<ArtRef, Pic>,
+    /// Songs whose tags were saved; refreshed in the queue after the next scan.
+    edited: Vec<crate::model::TrackRef>,
     pub art_file: Option<std::path::PathBuf>,
     pub lyrics: Option<(TrackRef, Lyrics)>,
     pub viz: viz::Viz,
@@ -1005,6 +1007,16 @@ impl App {
             LibEvent::Done { added, updated, removed, total } => {
                 self.scan = None;
                 self.library_size = total;
+                if !self.edited.is_empty() {
+                    // Songs whose tags we just saved: refresh them in the queue too.
+                    let fresh: Vec<Arc<Track>> = std::mem::take(&mut self.edited)
+                        .iter()
+                        .filter_map(|r| self.sources.get(&r.source).ok()?.track(r).ok())
+                        .map(Arc::new)
+                        .collect();
+                    self.engine.refresh_tracks(&fresh);
+                    self.fill_queue_view();
+                }
                 if added > 0 || removed > 0 || updated > 0 {
                     for v in &mut self.lists {
                         v.loading = true;
@@ -1056,8 +1068,16 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
-            Msg::EditTags(paths, fields) => self.dialog = Some(Dialog::tags(paths, fields)),
-            Msg::TagsSaved { ok, failed } => {
+            Msg::EditTags(info) => self.dialog = Some(Dialog::tags(*info)),
+            Msg::TagsSaved { ok, failed, arts, songs } => {
+                self.edited.extend(songs);
+                if !arts.is_empty() {
+                    self.grid_pics.retain(|a, _| !arts.contains(a));
+                    self.pics.retain(|(_, p)| !arts.contains(&p.art));
+                    if let Some(w) = &self.art {
+                        w.forget(arts);
+                    }
+                }
                 if failed.is_empty() {
                     self.info(format!("Saved tags for {ok} song{}", if ok == 1 { "" } else { "s" }));
                 } else {
@@ -1363,6 +1383,7 @@ pub fn run(cfg: Config) -> Result<()> {
         playlists: Vec::new(),
         engine,
         lib: lib.clone(),
+        edited: Vec::new(),
         sources,
         worker,
         art,

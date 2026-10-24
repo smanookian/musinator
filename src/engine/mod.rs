@@ -201,6 +201,16 @@ impl Engine {
         self.snap.lock().clone()
     }
 
+    /// New info for songs (tags or cover changed): update the queue and "now playing".
+    pub fn refresh_tracks(&self, fresh: &[Arc<Track>]) {
+        let find = |t: &Arc<Track>| fresh.iter().find(|f| f.r == t.r).cloned();
+        self.queue.lock().refresh(&find);
+        let mut s = self.snap.lock();
+        if let Some(new) = s.track.as_ref().and_then(find) {
+            s.track = Some(new);
+        }
+    }
+
     /// Position in the audible track.
     pub fn position(&self) -> Duration {
         self.view().position()

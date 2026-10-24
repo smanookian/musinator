@@ -6,13 +6,79 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
-use lofty::tag::{Accessor, ItemKey, Tag};
+use lofty::picture::{MimeType, Picture, PictureType};
+use lofty::tag::{Accessor, ItemKey, Tag, TagType};
 
 pub const FIELDS: [&str; 8] = ["Title", "Artist", "Album", "Album artist", "Year", "Track", "Disc", "Genre"];
 /// Fields that make sense for many songs at once.
 pub const ALBUM_FIELDS: [usize; 5] = [1, 2, 3, 4, 7];
 
 pub type Fields = [String; 8];
+
+/// What to do with the front cover picture inside the songs.
+pub enum CoverEdit {
+    Keep,
+    /// JPEG or PNG bytes (see [`load_cover`]).
+    Set(Vec<u8>),
+    Remove,
+}
+
+fn is_png(b: &[u8]) -> bool {
+    b.starts_with(b"\x89PNG")
+}
+
+fn is_jpeg(b: &[u8]) -> bool {
+    b.starts_with(&[0xFF, 0xD8])
+}
+
+/// File extension for cover bytes from [`load_cover`].
+pub fn cover_ext(b: &[u8]) -> &'static str {
+    if is_png(b) { "png" } else { "jpg" }
+}
+
+/// Read a picture for embedding. JPEG and PNG are used as they are (no quality
+/// loss); other formats (WebP, GIF, BMP) become a high-quality JPEG, because
+/// many players only show JPEG or PNG covers.
+pub fn load_cover(path: &Path) -> Result<Vec<u8>> {
+    let b = std::fs::read(path).with_context(|| format!("can't read {}", path.display()))?;
+    if is_jpeg(&b) || is_png(&b) {
+        return Ok(b);
+    }
+    let img = image::load_from_memory(&b).context("not a picture Musinator can read")?;
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 92).encode_image(&img.to_rgb8())?;
+    Ok(out)
+}
+
+/// Save `cover.jpg` / `cover.png` in a folder (copy first, then replace).
+/// Removes a `cover.*` with the other extension, so only one is left.
+pub fn save_folder_cover(dir: &Path, b: &[u8]) -> Result<std::path::PathBuf> {
+    let ext = cover_ext(b);
+    let path = dir.join(format!("cover.{ext}"));
+    let tmp = dir.join(format!(".musinator-tmp-cover.{ext}"));
+    std::fs::write(&tmp, b).context("write cover")?;
+    std::fs::rename(&tmp, &path).context("replace cover")?;
+    let other = dir.join(if ext == "png" { "cover.jpg" } else { "cover.png" });
+    let _ = std::fs::remove_file(other);
+    Ok(path)
+}
+
+/// "600×600 JPEG" for the embedded front cover, if any.
+pub fn cover_info(path: &Path) -> Option<String> {
+    let b = super::tags::embedded_art(path)?;
+    let kind = if is_png(&b) {
+        "PNG"
+    } else if is_jpeg(&b) {
+        "JPEG"
+    } else {
+        "picture"
+    };
+    let size = image::ImageReader::new(std::io::Cursor::new(&b)).with_guessed_format().ok()?.into_dimensions().ok();
+    Some(match size {
+        Some((w, h)) => format!("{w}×{h} {kind}"),
+        None => kind.to_string(),
+    })
+}
 
 pub fn read(path: &Path) -> Result<Fields> {
     let f = lofty::read_from_path(path)?;
@@ -108,7 +174,7 @@ pub fn from_filename(path: &Path) -> Fields {
 
 /// Write the given fields (None = leave as is). Writes a copy first, then
 /// replaces the original, so a crash can never leave a half-written song.
-pub fn write(path: &Path, fields: &[Option<String>; 8]) -> Result<()> {
+pub fn write(path: &Path, fields: &[Option<String>; 8], cover: &CoverEdit) -> Result<()> {
     let tmp = path.with_file_name(format!(".musinator-tmp-{}", path.file_name().unwrap_or_default().to_string_lossy()));
     std::fs::copy(path, &tmp).context("copy")?;
     let res = (|| -> Result<()> {
@@ -143,6 +209,26 @@ pub fn write(path: &Path, fields: &[Option<String>; 8]) -> Result<()> {
                     Err(_) => t.remove_disk(),
                 },
                 _ => set(t, ItemKey::Genre, v),
+            }
+        }
+        match cover {
+            CoverEdit::Keep => {}
+            CoverEdit::Set(data) => {
+                // One front cover: drop old front / untyped covers, keep back, booklet, ...
+                let t = f.primary_tag_mut().expect("tag");
+                t.remove_picture_type(PictureType::CoverFront);
+                t.remove_picture_type(PictureType::Other);
+                let mime = if is_png(data) { MimeType::Png } else { MimeType::Jpeg };
+                t.push_picture(Picture::unchecked(data.clone()).pic_type(PictureType::CoverFront).mime_type(mime).build());
+            }
+            CoverEdit::Remove => {
+                let types: Vec<TagType> = f.tags().iter().map(|t| t.tag_type()).collect();
+                for tt in types {
+                    if let Some(t) = f.tag_mut(tt) {
+                        t.remove_picture_type(PictureType::CoverFront);
+                        t.remove_picture_type(PictureType::Other);
+                    }
+                }
             }
         }
         f.save_to_path(&tmp, WriteOptions::default())?;
@@ -191,15 +277,41 @@ mod tests {
         f[0] = Some("New Title".into());
         f[1] = Some("Someone".into());
         f[5] = Some("7".into());
-        write(&p, &f).unwrap();
+        write(&p, &f, &CoverEdit::Keep).unwrap();
         let r = read(&p).unwrap();
         assert_eq!((r[0].as_str(), r[1].as_str(), r[5].as_str()), ("New Title", "Someone", "7"));
         // Only given fields change; no temp file left behind.
         let mut g: [Option<String>; 8] = Default::default();
         g[7] = Some("Rock".into());
-        write(&p, &g).unwrap();
+        write(&p, &g, &CoverEdit::Keep).unwrap();
         let r = read(&p).unwrap();
         assert_eq!((r[0].as_str(), r[7].as_str()), ("New Title", "Rock"));
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn sets_and_removes_the_cover() {
+        let dir = tempfile::tempdir().unwrap();
+        for ext in ["flac", "mp3", "m4a", "ogg"] {
+            let p = dir.path().join(format!("a.{ext}"));
+            let st = std::process::Command::new("ffmpeg")
+                .args(["-y", "-v", "error", "-f", "lavfi", "-i", "sine=duration=1"])
+                .arg(&p)
+                .status()
+                .unwrap();
+            assert!(st.success());
+            let png = dir.path().join("c.png");
+            image::RgbImage::from_pixel(40, 30, image::Rgb([200, 10, 10])).save(&png).unwrap();
+            let none: [Option<String>; 8] = Default::default();
+            write(&p, &none, &CoverEdit::Set(load_cover(&png).unwrap())).unwrap();
+            assert_eq!(cover_info(&p).as_deref(), Some("40×30 PNG"), "{ext}");
+            // A second picture replaces the first instead of adding one.
+            let webp = dir.path().join("c.webp");
+            image::RgbImage::from_pixel(20, 20, image::Rgb([0, 90, 200])).save(&webp).unwrap();
+            write(&p, &none, &CoverEdit::Set(load_cover(&webp).unwrap())).unwrap();
+            assert_eq!(cover_info(&p).as_deref(), Some("20×20 JPEG"), "{ext}");
+            write(&p, &none, &CoverEdit::Remove).unwrap();
+            assert_eq!(cover_info(&p), None, "{ext}");
+        }
     }
 }

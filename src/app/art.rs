@@ -42,8 +42,14 @@ pub struct ArtReady {
     pub file: Option<PathBuf>,
 }
 
+enum ArtMsg {
+    Req(ArtReq),
+    /// The picture changed on disk: drop it from the memory and disk caches.
+    Forget(Vec<ArtRef>),
+}
+
 pub struct ArtWorker {
-    tx: cb::Sender<ArtReq>,
+    tx: cb::Sender<ArtMsg>,
 }
 
 pub fn cache_file(a: &ArtRef) -> PathBuf {
@@ -54,7 +60,7 @@ pub fn cache_file(a: &ArtRef) -> PathBuf {
 
 impl ArtWorker {
     pub fn start(sources: Arc<Sources>, picker: Picker, out: cb::Sender<ArtReady>) -> Self {
-        let (tx, rx) = cb::unbounded::<ArtReq>();
+        let (tx, rx) = cb::unbounded::<ArtMsg>();
         std::thread::Builder::new()
             .name("art".into())
             .spawn(move || {
@@ -62,8 +68,19 @@ impl ArtWorker {
                 let mut order: VecDeque<ArtRef> = VecDeque::new();
                 while let Ok(first) = rx.recv() {
                     // Newest request per slot wins (skip stale ones while scrolling).
-                    let mut reqs = vec![first];
-                    reqs.extend(rx.try_iter());
+                    let mut reqs = Vec::new();
+                    for m in std::iter::once(first).chain(rx.try_iter()) {
+                        match m {
+                            ArtMsg::Req(r) => reqs.push(r),
+                            ArtMsg::Forget(arts) => {
+                                for a in arts {
+                                    mem.remove(&a);
+                                    order.retain(|o| *o != a);
+                                    let _ = std::fs::remove_file(cache_file(&a));
+                                }
+                            }
+                        }
+                    }
                     let mut seen = std::collections::HashSet::new();
                     let mut todo = Vec::new();
                     for r in reqs.into_iter().rev() {
@@ -99,7 +116,11 @@ impl ArtWorker {
     }
 
     pub fn request(&self, art: ArtRef, cells: Size, slot: Slot) {
-        let _ = self.tx.send(ArtReq { art, cells, slot });
+        let _ = self.tx.send(ArtMsg::Req(ArtReq { art, cells, slot }));
+    }
+
+    pub fn forget(&self, arts: Vec<ArtRef>) {
+        let _ = self.tx.send(ArtMsg::Forget(arts));
     }
 }
 

@@ -297,6 +297,11 @@ impl Library {
     }
 }
 
+/// The best cover picture file in a folder (cover.jpg, folder.png, ...).
+pub fn folder_cover(dir: &Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir).ok()?.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| is_cover(p)).min_by_key(|p| cover_rank(p))
+}
+
 fn is_cover(p: &Path) -> bool {
     cover_rank(p) < usize::MAX
 }

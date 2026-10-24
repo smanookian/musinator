@@ -48,6 +48,15 @@ impl Queue {
         self.version += 1;
     }
 
+    /// Swap in new info for songs (`find` returns it for changed songs).
+    pub fn refresh(&mut self, find: &dyn Fn(&Arc<Track>) -> Option<Arc<Track>>) {
+        for it in &mut self.items {
+            if let Some(t) = find(&it.track) {
+                it.track = t;
+            }
+        }
+    }
+
     pub fn items(&self) -> &[QueueItem] {
         &self.items
     }
