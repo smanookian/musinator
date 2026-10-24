@@ -103,9 +103,7 @@ impl Fmt {
 
     pub fn tag_kind(self) -> TagKind {
         match self {
-            Fmt::Flac16 | Fmt::Flac24_96 | Fmt::Flac24_192 | Fmt::Vorbis | Fmt::Opus => {
-                TagKind::Vorbis
-            }
+            Fmt::Flac16 | Fmt::Flac24_96 | Fmt::Flac24_192 | Fmt::Vorbis | Fmt::Opus => TagKind::Vorbis,
             Fmt::Mp3Cbr320 | Fmt::Mp3V0 => TagKind::Id3v2,
             Fmt::Aac | Fmt::Alac16 | Fmt::Alac24 => TagKind::Mp4,
             Fmt::Wav16 | Fmt::Wav24 => TagKind::Wav,
@@ -129,26 +127,8 @@ impl Fmt {
     /// ffmpeg output options (codec, quality, muxer).
     pub fn ffmpeg_args(self) -> &'static [&'static str] {
         match self {
-            Fmt::Flac16 => &[
-                "-c:a",
-                "flac",
-                "-sample_fmt",
-                "s16",
-                "-compression_level",
-                "8",
-                "-f",
-                "flac",
-            ],
-            Fmt::Flac24_96 | Fmt::Flac24_192 => &[
-                "-c:a",
-                "flac",
-                "-sample_fmt",
-                "s32",
-                "-compression_level",
-                "8",
-                "-f",
-                "flac",
-            ],
+            Fmt::Flac16 => &["-c:a", "flac", "-sample_fmt", "s16", "-compression_level", "8", "-f", "flac"],
+            Fmt::Flac24_96 | Fmt::Flac24_192 => &["-c:a", "flac", "-sample_fmt", "s32", "-compression_level", "8", "-f", "flac"],
             Fmt::Mp3Cbr320 => &["-c:a", "libmp3lame", "-b:a", "320k", "-f", "mp3"],
             Fmt::Mp3V0 => &["-c:a", "libmp3lame", "-q:a", "0", "-f", "mp3"],
             Fmt::Aac => &["-c:a", "aac", "-b:a", "192k", "-f", "ipod"],

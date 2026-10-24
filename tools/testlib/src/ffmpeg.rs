@@ -40,30 +40,14 @@ pub fn check() -> Result<()> {
         .output()
         .context("ffmpeg was not found. Install it first (Arch: sudo pacman -S ffmpeg).")?;
     let text = String::from_utf8_lossy(&out.stdout);
-    let has = |name: &str| {
-        text.lines()
-            .any(|l| l.split_whitespace().nth(1) == Some(name))
-    };
-    let mut missing: Vec<&str> = Fmt::ALL
-        .iter()
-        .map(|f| f.encoder())
-        .filter(|e| !has(e))
-        .collect();
+    let has = |name: &str| text.lines().any(|l| l.split_whitespace().nth(1) == Some(name));
+    let mut missing: Vec<&str> = Fmt::ALL.iter().map(|f| f.encoder()).filter(|e| !has(e)).collect();
     missing.dedup();
     if !missing.is_empty() {
-        bail!(
-            "ffmpeg has no encoder for: {}. Install an ffmpeg build with these encoders.",
-            missing.join(", ")
-        );
+        bail!("ffmpeg has no encoder for: {}. Install an ffmpeg build with these encoders.", missing.join(", "));
     }
-    let out = Command::new("ffmpeg")
-        .args(["-hide_banner", "-filters"])
-        .stdin(Stdio::null())
-        .output()?;
-    if !String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .any(|l| l.split_whitespace().nth(1) == Some("ebur128"))
-    {
+    let out = Command::new("ffmpeg").args(["-hide_banner", "-filters"]).stdin(Stdio::null()).output()?;
+    if !String::from_utf8_lossy(&out.stdout).lines().any(|l| l.split_whitespace().nth(1) == Some("ebur128")) {
         bail!("ffmpeg has no ebur128 filter. Install a full ffmpeg build.");
     }
     Ok(())
@@ -83,14 +67,7 @@ pub fn encode(pcm: &Pcm, outputs: &[(Fmt, &Path)], measure: bool) -> Result<Opti
         Pcm::S16Mono { sr, .. } => ("s16le", *sr),
     };
     let mut cmd = Command::new("ffmpeg");
-    cmd.args([
-        "-hide_banner",
-        "-nostats",
-        "-loglevel",
-        if measure { "info" } else { "error" },
-        "-y",
-    ])
-    .args([
+    cmd.args(["-hide_banner", "-nostats", "-loglevel", if measure { "info" } else { "error" }, "-y"]).args([
         "-f",
         input_fmt,
         "-ar",
@@ -101,37 +78,15 @@ pub fn encode(pcm: &Pcm, outputs: &[(Fmt, &Path)], measure: bool) -> Result<Opti
         "pipe:0",
     ]);
     for (fmt, path) in outputs {
-        cmd.args([
-            "-map",
-            "0:a",
-            "-map_metadata",
-            "-1",
-            "-fflags",
-            "+bitexact",
-            "-flags:a",
-            "+bitexact",
-        ])
-        .args(["-threads", "1"])
-        .args(fmt.ffmpeg_args())
-        .arg(part_path(path));
+        cmd.args(["-map", "0:a", "-map_metadata", "-1", "-fflags", "+bitexact", "-flags:a", "+bitexact"])
+            .args(["-threads", "1"])
+            .args(fmt.ffmpeg_args())
+            .arg(part_path(path));
     }
     if measure {
-        cmd.args([
-            "-map",
-            "0:a",
-            "-af",
-            "ebur128=peak=sample:framelog=verbose",
-            "-f",
-            "null",
-            "-",
-        ]);
+        cmd.args(["-map", "0:a", "-af", "ebur128=peak=sample:framelog=verbose", "-f", "null", "-"]);
     }
-    let mut child = cmd
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("could not start ffmpeg")?;
+    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().context("could not start ffmpeg")?;
     let mut stdin = child.stdin.take().expect("stdin is piped");
     let (written, output) = std::thread::scope(|s| {
         let writer = s.spawn(move || write_pcm(&mut stdin, pcm));
@@ -141,22 +96,14 @@ pub fn encode(pcm: &Pcm, outputs: &[(Fmt, &Path)], measure: bool) -> Result<Opti
     let output = output.context("ffmpeg did not finish")?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
-        let names: Vec<_> = outputs
-            .iter()
-            .map(|(_, p)| p.display().to_string())
-            .collect();
+        let names: Vec<_> = outputs.iter().map(|(_, p)| p.display().to_string()).collect();
         bail!("ffmpeg failed for {}:\n{}", names.join(", "), stderr.trim());
     }
     written.context("could not send audio to ffmpeg")?;
     for (_, path) in outputs {
-        std::fs::rename(part_path(path), path)
-            .with_context(|| format!("rename {}", path.display()))?;
+        std::fs::rename(part_path(path), path).with_context(|| format!("rename {}", path.display()))?;
     }
-    if measure {
-        parse_loudness(&stderr).map(Some)
-    } else {
-        Ok(None)
-    }
+    if measure { parse_loudness(&stderr).map(Some) } else { Ok(None) }
 }
 
 fn write_pcm(w: &mut impl Write, pcm: &Pcm) -> std::io::Result<()> {
@@ -193,51 +140,25 @@ pub fn measure_file(path: &Path) -> Result<Loudness> {
     let output = Command::new("ffmpeg")
         .args(["-hide_banner", "-nostats", "-i"])
         .arg(path)
-        .args([
-            "-map",
-            "0:a",
-            "-af",
-            "ebur128=peak=sample:framelog=verbose",
-            "-f",
-            "null",
-            "-",
-        ])
+        .args(["-map", "0:a", "-af", "ebur128=peak=sample:framelog=verbose", "-f", "null", "-"])
         .stdin(Stdio::null())
         .output()
         .context("could not start ffmpeg")?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
-        bail!(
-            "ffmpeg could not measure {}:\n{}",
-            path.display(),
-            stderr.trim()
-        );
+        bail!("ffmpeg could not measure {}:\n{}", path.display(), stderr.trim());
     }
     parse_loudness(&stderr)
 }
 
 fn parse_loudness(log: &str) -> Result<Loudness> {
-    let summary = log
-        .rfind("Summary:")
-        .map(|i| &log[i..])
-        .context("no ebur128 summary in ffmpeg output")?;
+    let summary = log.rfind("Summary:").map(|i| &log[i..]).context("no ebur128 summary in ffmpeg output")?;
     let value = |key: &str| -> Result<f64> {
-        let line = summary
-            .lines()
-            .map(str::trim)
-            .find(|l| l.starts_with(key))
-            .with_context(|| format!("no '{key}' in ebur128 summary"))?;
+        let line = summary.lines().map(str::trim).find(|l| l.starts_with(key)).with_context(|| format!("no '{key}' in ebur128 summary"))?;
         let token = line[key.len()..].split_whitespace().next().unwrap_or("");
-        Ok(if token.ends_with("inf") {
-            -200.0
-        } else {
-            token.parse()?
-        })
+        Ok(if token.ends_with("inf") { -200.0 } else { token.parse()? })
     };
-    Ok(Loudness {
-        lufs: value("I:")?,
-        peak_db: value("Peak:")?,
-    })
+    Ok(Loudness { lufs: value("I:")?, peak_db: value("Peak:")? })
 }
 
 #[cfg(test)]

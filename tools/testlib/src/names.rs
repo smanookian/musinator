@@ -148,10 +148,9 @@ const NOUN: &[&str] = &[
 ];
 
 const FIRST: &[&str] = &[
-    "Ada", "Milo", "Zoë", "Søren", "Mélanie", "José", "Björn", "Ines", "Kai", "Lena", "Tomás",
-    "Noor", "Elif", "Jonas", "Chloé", "Mateo", "Freya", "Anaïs", "Pål", "Ana", "Theo", "Mira",
-    "Ravi", "Hana", "Oskar", "Liv", "Nina", "Émile", "Dario", "Sasha", "Yara", "Felix", "Iris",
-    "Bruno", "Alma", "Luca",
+    "Ada", "Milo", "Zoë", "Søren", "Mélanie", "José", "Björn", "Ines", "Kai", "Lena", "Tomás", "Noor", "Elif", "Jonas", "Chloé", "Mateo",
+    "Freya", "Anaïs", "Pål", "Ana", "Theo", "Mira", "Ravi", "Hana", "Oskar", "Liv", "Nina", "Émile", "Dario", "Sasha", "Yara", "Felix",
+    "Iris", "Bruno", "Alma", "Luca",
 ];
 
 const LAST: &[&str] = &[
@@ -256,15 +255,7 @@ const OTHER_TITLES: &[&str] = &[
     "Ålesund",
 ];
 
-const SUFFIX: &[&str] = &[
-    " (Remix)",
-    " (Live)",
-    " (Interlude)",
-    " (Reprise)",
-    " (Demo)",
-    " (Radio Edit)",
-    " (Acoustic)",
-];
+const SUFFIX: &[&str] = &[" (Remix)", " (Live)", " (Interlude)", " (Reprise)", " (Demo)", " (Radio Edit)", " (Acoustic)"];
 
 fn adj_noun(rng: &mut Rng) -> String {
     format!("{} {}", rng.pick(ADJ), rng.pick(NOUN))
@@ -306,12 +297,7 @@ pub fn album_title(rng: &mut Rng) -> String {
         5 => rng.pick(CJK_TITLES).to_string(),
         6 => rng.pick(OTHER_TITLES).to_string(),
         7 => long_title(rng),
-        _ => format!(
-            "{} {} Vol. {}",
-            rng.pick(ADJ),
-            rng.pick(NOUN),
-            rng.range(1, 4)
-        ),
+        _ => format!("{} {} Vol. {}", rng.pick(ADJ), rng.pick(NOUN), rng.range(1, 4)),
     }
 }
 
@@ -327,29 +313,12 @@ pub fn track_title(rng: &mut Rng) -> String {
         7 => long_title(rng),
         _ => format!("{} ({} Mix)", adj_noun(rng), rng.pick(ADJ)),
     };
-    if rng.chance(0.06) {
-        format!("{base}{}", rng.pick(SUFFIX))
-    } else {
-        base
-    }
+    if rng.chance(0.06) { format!("{base}{}", rng.pick(SUFFIX)) } else { base }
 }
 
-const LYRIC_SUBJ: &[&str] = &[
-    "We",
-    "You",
-    "I",
-    "They",
-    "The streets",
-    "Our voices",
-    "The waves",
-    "Old radios",
-    "The city lights",
-    "Old friends",
-];
-const LYRIC_VERB: &[&str] = &[
-    "keep", "follow", "carry", "forget", "hear", "light up", "count", "chase", "hold", "remember",
-    "wait for",
-];
+const LYRIC_SUBJ: &[&str] =
+    &["We", "You", "I", "They", "The streets", "Our voices", "The waves", "Old radios", "The city lights", "Old friends"];
+const LYRIC_VERB: &[&str] = &["keep", "follow", "carry", "forget", "hear", "light up", "count", "chase", "hold", "remember", "wait for"];
 const LYRIC_OBJ: &[&str] = &[
     "the signal",
     "a thousand lights",
@@ -364,56 +333,22 @@ const LYRIC_OBJ: &[&str] = &[
     "the slow parade",
     "the northern wind",
 ];
-const LYRIC_TAIL: &[&str] = &[
-    "",
-    " tonight",
-    " again",
-    " down the line",
-    " until the dawn",
-    " in the dark",
-    " for a while",
-];
+const LYRIC_TAIL: &[&str] = &["", " tonight", " again", " down the line", " until the dawn", " in the dark", " for a while"];
 
 /// One invented lyric line.
 pub fn lyric_line(rng: &mut Rng) -> String {
-    format!(
-        "{} {} {}{}",
-        rng.pick(LYRIC_SUBJ),
-        rng.pick(LYRIC_VERB),
-        rng.pick(LYRIC_OBJ),
-        rng.pick(LYRIC_TAIL)
-    )
+    format!("{} {} {}{}", rng.pick(LYRIC_SUBJ), rng.pick(LYRIC_VERB), rng.pick(LYRIC_OBJ), rng.pick(LYRIC_TAIL))
 }
 
 /// A synced LRC text with lines spread over `len_s` seconds.
-pub fn lrc(
-    rng: &mut Rng,
-    title: &str,
-    artist: &str,
-    album: &str,
-    len_s: f64,
-    gap: (f64, f64),
-) -> String {
-    let mut s = format!(
-        "[ti:{title}]\n[ar:{artist}]\n[al:{album}]\n[length:{:02}:{:02}]\n",
-        (len_s as u64) / 60,
-        (len_s as u64) % 60
-    );
+pub fn lrc(rng: &mut Rng, title: &str, artist: &str, album: &str, len_s: f64, gap: (f64, f64)) -> String {
+    let mut s = format!("[ti:{title}]\n[ar:{artist}]\n[al:{album}]\n[length:{:02}:{:02}]\n", (len_s as u64) / 60, (len_s as u64) % 60);
     let mut t = rng.range_f(0.2, 0.8);
     let end = (len_s - 0.3).max(0.5);
     while t < end {
         let cs = (t * 100.0).round() as u64;
-        let text = if rng.chance(0.08) {
-            "(instrumental)".to_string()
-        } else {
-            lyric_line(rng)
-        };
-        s.push_str(&format!(
-            "[{:02}:{:02}.{:02}]{text}\n",
-            cs / 6000,
-            (cs / 100) % 60,
-            cs % 100
-        ));
+        let text = if rng.chance(0.08) { "(instrumental)".to_string() } else { lyric_line(rng) };
+        s.push_str(&format!("[{:02}:{:02}.{:02}]{text}\n", cs / 6000, (cs / 100) % 60, cs % 100));
         t += rng.range_f(gap.0, gap.1);
     }
     s

@@ -99,10 +99,7 @@ fn unique(rng: &mut Rng, used: &mut HashSet<String>, make: fn(&mut Rng) -> Strin
     }
     // Word lists ran out of fresh combinations: number it.
     let base = make(rng);
-    (2..)
-        .map(|n| format!("{base} {n}"))
-        .find(|n| used.insert(n.clone()))
-        .expect("endless range")
+    (2..).map(|n| format!("{base} {n}")).find(|n| used.insert(n.clone())).expect("endless range")
 }
 
 /// Plan the library. `master_durations` are the lengths of the library masters; short ones
@@ -111,9 +108,7 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
     let mut rng = Rng::new(seed);
     let n_artists = (n_tracks as f64 / 33.0).round().max(1.0) as usize;
     let mut used: HashSet<String> = RESERVED.iter().map(|s| s.to_string()).collect();
-    let artists: Vec<String> = (0..n_artists)
-        .map(|_| unique(&mut rng, &mut used, names::artist_name))
-        .collect();
+    let artists: Vec<String> = (0..n_artists).map(|_| unique(&mut rng, &mut used, names::artist_name)).collect();
     let weights: Vec<u32> = Fmt::ALL.iter().map(|f| f.album_weight()).collect();
     let master_weights: Vec<u32> = master_durations
         .iter()
@@ -130,11 +125,7 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
         })
         .collect();
     // Big formats (WAV, 24-bit ALAC, 24/192) only use short masters.
-    let short_weights: Vec<u32> = master_durations
-        .iter()
-        .zip(&master_weights)
-        .map(|(&d, &w)| if d <= 5.0 { w } else { 0 })
-        .collect();
+    let short_weights: Vec<u32> = master_durations.iter().zip(&master_weights).map(|(&d, &w)| if d <= 5.0 { w } else { 0 }).collect();
     let mut titles: BTreeMap<String, HashSet<String>> = BTreeMap::new();
     let mut albums = Vec::new();
     let mut remaining = n_tracks;
@@ -150,23 +141,11 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
             // Skewed: some artists have many albums, most have a few.
             artists[(n_artists as f64 * r.f64().powf(1.6)) as usize].clone()
         };
-        let title = unique(
-            &mut r,
-            titles.entry(album_artist.clone()).or_default(),
-            names::album_title,
-        );
+        let title = unique(&mut r, titles.entry(album_artist.clone()).or_default(), names::album_title);
         let fmt = Fmt::ALL[r.weighted(&weights)];
         let track_weights =
-            if matches!(fmt, Fmt::Wav16 | Fmt::Wav24 | Fmt::Alac24 | Fmt::Flac24_192) {
-                &short_weights
-            } else {
-                &master_weights
-            };
-        let disc_total = if r.chance(0.04) {
-            if r.chance(0.2) { 3 } else { 2 }
-        } else {
-            1
-        };
+            if matches!(fmt, Fmt::Wav16 | Fmt::Wav24 | Fmt::Alac24 | Fmt::Flac24_192) { &short_weights } else { &master_weights };
+        let disc_total = if r.chance(0.04) { if r.chance(0.2) { 3 } else { 2 } } else { 1 };
         let max_per_disc = if disc_total > 1 { 12 } else { 14 };
         let cover = match r.weighted(&[50, 25, 25]) {
             0 => Cover::Embedded { png: r.chance(0.1) },
@@ -211,16 +190,8 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
                 if remaining == 0 {
                     break 'discs;
                 }
-                let artist = if compilation {
-                    r.pick(&artists).clone()
-                } else {
-                    album.album_artist.clone()
-                };
-                let artist = if r.chance(0.04) {
-                    format!("{artist} feat. {}", r.pick(&artists))
-                } else {
-                    artist
-                };
+                let artist = if compilation { r.pick(&artists).clone() } else { album.album_artist.clone() };
+                let artist = if r.chance(0.04) { format!("{artist} feat. {}", r.pick(&artists)) } else { artist };
                 let x = r.f64();
                 album.tracks.push(TrackPlan {
                     title: unique(&mut r, &mut track_titles, names::track_title),
@@ -247,42 +218,24 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
 
 /// Safe single path component.
 pub fn sanitize(name: &str) -> String {
-    let mut s: String = name
-        .chars()
-        .map(|c| if c == '/' || c == '\0' { '-' } else { c })
-        .collect();
+    let mut s: String = name.chars().map(|c| if c == '/' || c == '\0' { '-' } else { c }).collect();
     while s.len() > 180 {
         s.pop();
     }
     let s = s.trim().trim_end_matches('.').to_string();
-    if s.starts_with('.') {
-        format!("_{s}")
-    } else {
-        s
-    }
+    if s.starts_with('.') { format!("_{s}") } else { s }
 }
 
 pub fn album_dir(root: &Path, artist: &str, year: u32, title: &str) -> PathBuf {
-    root.join(sanitize(artist))
-        .join(sanitize(&format!("{year} - {title}")))
+    root.join(sanitize(artist)).join(sanitize(&format!("{year} - {title}")))
 }
 
 /// Album loudness: duration-weighted energy mean of the tracks; peak: the max.
 fn album_loudness(tracks: &[(f64, Loudness)]) -> Loudness {
     let total: f64 = tracks.iter().map(|(d, _)| d).sum();
-    let energy: f64 = tracks
-        .iter()
-        .map(|(d, l)| d * 10f64.powf(l.lufs / 10.0))
-        .sum::<f64>()
-        / total;
-    let peak_db = tracks
-        .iter()
-        .map(|(_, l)| l.peak_db)
-        .fold(f64::MIN, f64::max);
-    Loudness {
-        lufs: 10.0 * energy.log10(),
-        peak_db,
-    }
+    let energy: f64 = tracks.iter().map(|(d, l)| d * 10f64.powf(l.lufs / 10.0)).sum::<f64>() / total;
+    let peak_db = tracks.iter().map(|(_, l)| l.peak_db).fold(f64::MIN, f64::max);
+    Loudness { lufs: 10.0 * energy.log10(), peak_db }
 }
 
 /// Gain tags for each track: R128 for Opus, ReplayGain (-18 LUFS reference) otherwise.
@@ -293,10 +246,7 @@ pub fn gain_tags(fmt: Fmt, tracks: &[(f64, Loudness)]) -> Vec<GainTags> {
         .iter()
         .map(|(_, l)| {
             if fmt == Fmt::Opus {
-                GainTags::R128 {
-                    track: q78(l.lufs),
-                    album: q78(album.lufs),
-                }
+                GainTags::R128 { track: q78(l.lufs), album: q78(album.lufs) }
             } else {
                 GainTags::ReplayGain(ReplayGain {
                     track_gain: -18.0 - l.lufs,
@@ -314,8 +264,7 @@ pub fn cover_mime(png: bool) -> MimeType {
 }
 
 pub fn copy_and_tag(src: &Path, dst: &Path, fmt: Fmt, tags: &TrackTags) -> Result<()> {
-    std::fs::copy(src, dst)
-        .with_context(|| format!("copy {} to {}", src.display(), dst.display()))?;
+    std::fs::copy(src, dst).with_context(|| format!("copy {} to {}", src.display(), dst.display()))?;
     tags::write(dst, fmt, tags)
 }
 
@@ -323,14 +272,10 @@ pub fn copy_and_tag(src: &Path, dst: &Path, fmt: Fmt, tags: &TrackTags) -> Resul
 pub fn write_album(root: &Path, a: &AlbumPlan, m: &Masters) -> Result<Stats> {
     let dir = album_dir(root, &a.album_artist, a.year, &a.title);
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    let mut stats = Stats {
-        albums: 1,
-        ..Stats::default()
-    };
+    let mut stats = Stats { albums: 1, ..Stats::default() };
     let mut rng = Rng::new(a.seed);
 
-    let png =
-        matches!(a.cover, Cover::Embedded { png: true }) || a.cover == Cover::File("front.png");
+    let png = matches!(a.cover, Cover::Embedded { png: true }) || a.cover == Cover::File("front.png");
     let cover_bytes = match a.cover {
         Cover::None => {
             stats.cover_none += 1;
@@ -347,11 +292,7 @@ pub fn write_album(root: &Path, a: &AlbumPlan, m: &Masters) -> Result<Stats> {
         }
     };
 
-    let louds: Vec<(f64, Loudness)> = a
-        .tracks
-        .iter()
-        .map(|t| (m.lib[t.master].dur, m.lib[t.master].loud))
-        .collect();
+    let louds: Vec<(f64, Loudness)> = a.tracks.iter().map(|t| (m.lib[t.master].dur, m.lib[t.master].loud)).collect();
     let gains = if a.gain {
         if a.fmt == Fmt::Opus {
             stats.r128_albums += 1;
@@ -380,14 +321,7 @@ pub fn write_album(root: &Path, a: &AlbumPlan, m: &Masters) -> Result<Stats> {
         let dur = m.lib[t.master].dur;
         let lrc = match t.lyrics {
             Lyrics::None => None,
-            _ => Some(names::lrc(
-                &mut rng,
-                &t.title,
-                &t.artist,
-                &a.title,
-                dur,
-                (1.0, 2.2),
-            )),
+            _ => Some(names::lrc(&mut rng, &t.title, &t.artist, &a.title, dur, (1.0, 2.2))),
         };
         let tags = TrackTags {
             title: &t.title,
@@ -402,20 +336,13 @@ pub fn write_album(root: &Path, a: &AlbumPlan, m: &Masters) -> Result<Stats> {
             disc_total: a.disc_total,
             compilation: a.compilation,
             cover: cover_bytes.as_deref().map(|b| (b, cover_mime(png))),
-            lyrics: if t.lyrics == Lyrics::Embedded {
-                lrc.as_deref()
-            } else {
-                None
-            },
+            lyrics: if t.lyrics == Lyrics::Embedded { lrc.as_deref() } else { None },
             gain,
         };
         copy_and_tag(&m.lib_path(a.fmt, t.master), &dst, a.fmt, &tags)?;
         match t.lyrics {
             Lyrics::Lrc => {
-                std::fs::write(
-                    folder.join(format!("{stem}.lrc")),
-                    lrc.as_deref().unwrap_or_default(),
-                )?;
+                std::fs::write(folder.join(format!("{stem}.lrc")), lrc.as_deref().unwrap_or_default())?;
                 stats.lrc += 1;
             }
             Lyrics::Embedded => stats.lyrics_embedded += 1,
@@ -437,11 +364,7 @@ mod tests {
         let a = plan(7, 2000, &DURS);
         let b = plan(7, 2000, &DURS);
         assert_eq!(a.iter().map(|x| x.tracks.len()).sum::<usize>(), 2000);
-        let key = |p: &[AlbumPlan]| {
-            p.iter()
-                .map(|x| (x.album_artist.clone(), x.title.clone(), x.fmt))
-                .collect::<Vec<_>>()
-        };
+        let key = |p: &[AlbumPlan]| p.iter().map(|x| (x.album_artist.clone(), x.title.clone(), x.fmt)).collect::<Vec<_>>();
         assert_eq!(key(&a), key(&b));
         assert_ne!(key(&a), key(&plan(8, 2000, &DURS)));
     }
@@ -449,10 +372,7 @@ mod tests {
     #[test]
     fn album_folders_are_unique() {
         let p = plan(1, 3000, &DURS);
-        let dirs: HashSet<PathBuf> = p
-            .iter()
-            .map(|a| album_dir(Path::new("/x"), &a.album_artist, a.year, &a.title))
-            .collect();
+        let dirs: HashSet<PathBuf> = p.iter().map(|a| album_dir(Path::new("/x"), &a.album_artist, a.year, &a.title)).collect();
         assert_eq!(dirs.len(), p.len());
     }
 
@@ -465,10 +385,7 @@ mod tests {
 
     #[test]
     fn r128_gain_is_q78_relative_to_minus_23() {
-        let l = Loudness {
-            lufs: -13.0,
-            peak_db: -1.0,
-        };
+        let l = Loudness { lufs: -13.0, peak_db: -1.0 };
         match gain_tags(Fmt::Opus, &[(5.0, l)])[0] {
             GainTags::R128 { track, album } => assert_eq!((track, album), (-2560, -2560)),
             _ => panic!("expected R128"),

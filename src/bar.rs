@@ -29,9 +29,7 @@ fn module() -> Value {
 }
 
 fn has_module(v: &Value) -> bool {
-    ["left", "center", "right"]
-        .iter()
-        .any(|s| v["bar"]["layout"][s].as_array().is_some_and(|a| a.iter().any(|m| m["id"] == ID)))
+    ["left", "center", "right"].iter().any(|s| v["bar"]["layout"][s].as_array().is_some_and(|a| a.iter().any(|m| m["id"] == ID)))
 }
 
 /// Make shell.json match the setting. No-op when nothing needs to change.

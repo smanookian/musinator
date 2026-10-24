@@ -22,11 +22,7 @@ fn hsv(h: f64, s: f64, v: f64) -> [f64; 3] {
 }
 
 fn mix(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
-    [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-    ]
+    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
 /// Encoded cover image (JPEG or PNG), unique for each seed.
@@ -36,11 +32,7 @@ pub fn make(seed: u64, size: u32, png: bool) -> Result<Vec<u8>> {
     let shift = rng.range_f(0.08, 0.35) * if rng.chance(0.5) { 1.0 } else { -1.0 };
     let top = hsv(hue, rng.range_f(0.5, 0.9), rng.range_f(0.55, 0.95));
     let bottom = hsv(hue + shift, rng.range_f(0.6, 1.0), rng.range_f(0.15, 0.45));
-    let ring = hsv(
-        hue + 0.5 + rng.range_f(-0.1, 0.1),
-        rng.range_f(0.2, 0.7),
-        rng.range_f(0.8, 1.0),
-    );
+    let ring = hsv(hue + 0.5 + rng.range_f(-0.1, 0.1), rng.range_f(0.2, 0.7), rng.range_f(0.8, 1.0));
     let (cx, cy) = (rng.range_f(0.25, 0.75), rng.range_f(0.25, 0.75));
     let rings = rng.range_f(4.0, 16.0);
     let sharp = rng.range_f(2.0, 10.0);

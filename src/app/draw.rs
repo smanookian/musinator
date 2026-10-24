@@ -89,7 +89,11 @@ pub fn pane(f: &mut Frame, app: &App, area: Rect, title: &str, hints: &str, focu
     let t = &app.theme;
     let border = if focused { t.accent } else { t.border };
     let kind = if app.cfg.corners == "square" { BorderType::Plain } else { BorderType::Rounded };
-    let block = Block::default().borders(Borders::ALL).border_type(kind).border_style(Style::default().fg(c(border)).bg(c(t.bg))).style(Style::default().bg(c(t.bg)));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(kind)
+        .border_style(Style::default().fg(c(border)).bg(c(t.bg)))
+        .style(Style::default().bg(c(t.bg)));
     let inner = block.inner(area);
     f.render_widget(block, area);
     if inner.height == 0 || inner.width < 4 {
@@ -103,7 +107,14 @@ pub fn pane(f: &mut Frame, app: &App, area: Rect, title: &str, hints: &str, focu
     let room = bar.width.saturating_sub(2);
     let title_w = title.width() as u16;
     let show_hints = hw > 0 && title_w + hw + 4 <= room;
-    put(buf, bar.x + 1, bar.y, title, room.saturating_sub(if show_hints { hw + 2 } else { 0 }), Style::default().fg(c(tfg)).bg(c(bg)).add_modifier(Modifier::BOLD));
+    put(
+        buf,
+        bar.x + 1,
+        bar.y,
+        title,
+        room.saturating_sub(if show_hints { hw + 2 } else { 0 }),
+        Style::default().fg(c(tfg)).bg(c(bg)).add_modifier(Modifier::BOLD),
+    );
     if show_hints {
         put_right(buf, bar.x + bar.width - 1, bar.y, hints, hw, Style::default().fg(c(hfg)).bg(c(bg)));
     }
@@ -219,15 +230,24 @@ fn sidebar(f: &mut Frame, app: &mut App, area: Rect) {
 fn list_hints(app: &App) -> String {
     let Some(v) = app.list() else { return String::new() };
     if v.kind == ListKind::Queue {
-        return hints(app, &[(Action::PlaySelected, "play"), (Action::MoveDown, "move"), (Action::Remove, "remove"), (Action::ClearQueue, "clear")])
-            .replace("J move", "J/K move");
+        return hints(
+            app,
+            &[(Action::PlaySelected, "play"), (Action::MoveDown, "move"), (Action::Remove, "remove"), (Action::ClearQueue, "clear")],
+        )
+        .replace("J move", "J/K move");
     }
     if v.playlist_id().is_some() {
-        return hints(app, &[(Action::PlaySelected, "play"), (Action::MoveDown, "move"), (Action::Remove, "remove"), (Action::ExportPlaylist, "export")])
-            .replace("J move", "J/K move");
+        return hints(
+            app,
+            &[(Action::PlaySelected, "play"), (Action::MoveDown, "move"), (Action::Remove, "remove"), (Action::ExportPlaylist, "export")],
+        )
+        .replace("J move", "J/K move");
     }
     if v.is_albums() {
-        return hints(app, &[(Action::PlaySelected, "open"), (Action::AddQueue, "queue"), (Action::GridView, "grid"), (Action::Search, "search")]);
+        return hints(
+            app,
+            &[(Action::PlaySelected, "open"), (Action::AddQueue, "queue"), (Action::GridView, "grid"), (Action::Search, "search")],
+        );
     }
     if v.items.first().is_some_and(|i| matches!(i, Item::Node(_))) {
         return hints(app, &[(Action::PlaySelected, "open"), (Action::AddQueue, "queue"), (Action::Search, "search")]);
@@ -298,10 +318,25 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
         fill(buf, r, bg);
     }
     let base = Style::default().bg(c(bg));
-    let fg = if playing { t.accent } else if sel { t.selection_fg } else { t.fg };
-    let main = { let s = base.fg(c(fg)); if sel || playing { s.add_modifier(Modifier::BOLD) } else { s } };
+    let fg = if playing {
+        t.accent
+    } else if sel {
+        t.selection_fg
+    } else {
+        t.fg
+    };
+    let main = {
+        let s = base.fg(c(fg));
+        if sel || playing { s.add_modifier(Modifier::BOLD) } else { s }
+    };
     let muted = base.fg(c(if playing { t.accent } else { t.muted }));
-    let (glyph, gst) = if sel { ("→", base.fg(c(t.marker))) } else if playing { ("♪", base.fg(c(t.accent))) } else { (" ", base) };
+    let (glyph, gst) = if sel {
+        ("→", base.fg(c(t.marker)))
+    } else if playing {
+        ("♪", base.fg(c(t.accent)))
+    } else {
+        (" ", base)
+    };
     put(buf, r.x + 1, r.y, glyph, 1, gst);
     let x = r.x + 3;
     let right = r.x + r.width - 1;
@@ -319,7 +354,14 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
                 let tw = (avail as f32 * 0.42) as u16;
                 let aw = (avail as f32 * 0.28) as u16;
                 put(buf, x, r.y, tr.display_title(), tw.saturating_sub(1), main);
-                put(buf, x + tw, r.y, tr.display_artist(), aw.saturating_sub(1), if playing { main } else { base.fg(c(if sel { t.selection_fg } else { t.fg })) });
+                put(
+                    buf,
+                    x + tw,
+                    r.y,
+                    tr.display_artist(),
+                    aw.saturating_sub(1),
+                    if playing { main } else { base.fg(c(if sel { t.selection_fg } else { t.fg })) },
+                );
                 put(buf, x + tw + aw, r.y, &tr.album, avail.saturating_sub(tw + aw), muted);
             }
         }
@@ -455,7 +497,13 @@ fn progress(buf: &mut Buffer, app: &mut App, r: Rect) {
     let frac = if len > 0 { (pos as f64 / len as f64).clamp(0.0, 1.0) } else { 0.0 };
     let knob = ((bw - 1) as f64 * frac).round() as u16;
     for i in 0..bw {
-        let (ch, col) = if i < knob { ("━", t.accent) } else if i == knob { ("●", t.accent) } else { ("─", t.track) };
+        let (ch, col) = if i < knob {
+            ("━", t.accent)
+        } else if i == knob {
+            ("●", t.accent)
+        } else {
+            ("─", t.track)
+        };
         buf.set_string(bx + i, r.y, ch, Style::default().fg(c(col)));
     }
 }
@@ -552,15 +600,29 @@ pub fn viz_bars(r: Rect) -> usize {
 
 fn now_panel(f: &mut Frame, app: &mut App, area: Rect) {
     let focused = app.focus == Focus::Panel;
-    let h = hints(app, &[(Action::PlayPause, "pause"), (Action::Next, "/p skip"), (Action::SeekBack, "/→ seek"), (Action::ToggleScreen, "full")])
-        .replace("n /p skip", "n/p skip")
-        .replace("← /→ seek", "←/→ seek");
+    let k = |a| app.keys.hint(a);
+    let h = format!(
+        "{} pause  {}/{} skip  {}/{} seek  {} full",
+        k(Action::PlayPause),
+        k(Action::Next),
+        k(Action::Prev),
+        k(Action::SeekBack),
+        k(Action::SeekFwd),
+        k(Action::ToggleScreen)
+    );
     let inner = pane(f, app, area, "Now Playing", &h, focused);
     app.hit.panel = inner;
     let snap = app.now();
     let t = app.theme.clone();
     let Some(track) = snap.track.clone() else {
-        put(f.buffer_mut(), inner.x + 3, inner.y + 1, "Nothing playing · enter plays the selected song", inner.width.saturating_sub(4), Style::default().fg(c(t.muted)));
+        put(
+            f.buffer_mut(),
+            inner.x + 3,
+            inner.y + 1,
+            "Nothing playing · enter plays the selected song",
+            inner.width.saturating_sub(4),
+            Style::default().fg(c(t.muted)),
+        );
         return;
     };
     let ih = inner.height.saturating_sub(1);
@@ -618,13 +680,21 @@ fn now_playing(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
     let focused = app.focus == Focus::Panel;
-    let h = hints(app, &[(Action::ToggleScreen, "back"), (Action::Lyrics, "lyrics"), (Action::Visualizer, "visualizer")]).replace("  ", " · ");
+    let h =
+        hints(app, &[(Action::ToggleScreen, "back"), (Action::Lyrics, "lyrics"), (Action::Visualizer, "visualizer")]).replace("  ", " · ");
     let inner = pane(f, app, area, "Now Playing", &h, focused);
     app.hit.panel = inner;
     let t = app.theme.clone();
     let snap = app.now();
     let Some(track) = snap.track.clone() else {
-        put(f.buffer_mut(), inner.x + 2, inner.y + 1, "Nothing playing · press z to go back and pick music", inner.width.saturating_sub(3), Style::default().fg(c(t.muted)));
+        put(
+            f.buffer_mut(),
+            inner.x + 2,
+            inner.y + 1,
+            "Nothing playing · press z to go back and pick music",
+            inner.width.saturating_sub(3),
+            Style::default().fg(c(t.muted)),
+        );
         return;
     };
     // Bottom part: progress, controls, visualizer.
@@ -705,9 +775,11 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn up_next(f: &mut Frame, app: &mut App, area: Rect) {
     let focused = app.focus == Focus::List;
-    let items: Vec<(Arc<Track>, Option<String>)> = app.engine.queue.lock().up_next().iter().map(|i| (i.track.clone(), i.from.clone())).collect();
+    let items: Vec<(Arc<Track>, Option<String>)> =
+        app.engine.queue.lock().up_next().iter().map(|i| (i.track.clone(), i.from.clone())).collect();
     let title = format!("Up next · {}", items.len());
-    let h = format!("{}/{} move · {} remove", app.keys.hint(Action::MoveDown), app.keys.hint(Action::MoveUp), app.keys.hint(Action::Remove));
+    let h =
+        format!("{}/{} move · {} remove", app.keys.hint(Action::MoveDown), app.keys.hint(Action::MoveUp), app.keys.hint(Action::Remove));
     let inner = pane(f, app, area, &title, &h, focused);
     app.hit.list = inner;
     let t = app.theme.clone();
@@ -743,7 +815,14 @@ fn up_next(f: &mut Frame, app: &mut App, area: Rect) {
         let y = inner.y + (k - app.upnext_offset) as u16;
         match r {
             None => {
-                put(buf, inner.x + 1, y, &format!("from: {}", labels[label_i]), inner.width.saturating_sub(2), Style::default().fg(c(t.muted)));
+                put(
+                    buf,
+                    inner.x + 1,
+                    y,
+                    &format!("from: {}", labels[label_i]),
+                    inner.width.saturating_sub(2),
+                    Style::default().fg(c(t.muted)),
+                );
                 label_i += 1;
             }
             Some(i) => {
@@ -759,7 +838,14 @@ fn up_next(f: &mut Frame, app: &mut App, area: Rect) {
                 let dur = tr.duration_ms.map(fmt_time).unwrap_or_default();
                 let dx = put_right(buf, inner.x + inner.width - 1, y, &dur, 9, Style::default().fg(c(t.muted)).bg(c(bg)));
                 let st = Style::default().bg(c(bg)).fg(c(if sel { t.selection_fg } else { t.fg }));
-                put(buf, inner.x + 1, y, tr.display_title(), dx.saturating_sub(inner.x + 3), if sel { st.add_modifier(Modifier::BOLD) } else { st });
+                put(
+                    buf,
+                    inner.x + 1,
+                    y,
+                    tr.display_title(),
+                    dx.saturating_sub(inner.x + 3),
+                    if sel { st.add_modifier(Modifier::BOLD) } else { st },
+                );
             }
         }
     }

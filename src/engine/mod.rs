@@ -88,7 +88,10 @@ pub enum Event {
     Volume,
     Error(String),
     /// A track stopped being current; `listened` is real listening time.
-    Finished { track: Arc<Track>, listened: Duration },
+    Finished {
+        track: Arc<Track>,
+        listened: Duration,
+    },
 }
 
 /// What is audible right now. Cheap to clone.

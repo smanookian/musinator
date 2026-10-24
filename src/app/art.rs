@@ -9,9 +9,9 @@ use std::sync::Arc;
 use crossbeam_channel as cb;
 use image::DynamicImage;
 use ratatui::layout::Size;
+use ratatui_image::Resize;
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::Protocol;
-use ratatui_image::Resize;
 
 use crate::model::ArtRef;
 use crate::source::Sources;

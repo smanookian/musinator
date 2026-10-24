@@ -48,9 +48,7 @@ struct Args {
 
 fn parse_args() -> Result<Option<Args>> {
     let mut args = Args {
-        out: std::env::home_dir()
-            .context("no home folder")?
-            .join("Music/Musinator Test Library"),
+        out: std::env::home_dir().context("no home folder")?.join("Music/Musinator Test Library"),
         tracks: 10_000,
         seed: 1,
         jobs: None,
@@ -90,30 +88,21 @@ fn run(args: Args) -> Result<()> {
         return clean(&args.out);
     }
     if let Some(jobs) = args.jobs {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(jobs.max(1))
-            .build_global()?;
+        rayon::ThreadPoolBuilder::new().num_threads(jobs.max(1)).build_global()?;
     }
     ffmpeg::check()?;
     let start = Instant::now();
     let out = &args.out;
     prepare(out)?;
 
-    println!(
-        "Building audio masters (cached in {})...",
-        out.join(MASTERS_DIR).display()
-    );
+    println!("Building audio masters (cached in {})...", out.join(MASTERS_DIR).display());
     let m = masters::build(&out.join(MASTERS_DIR))?;
 
     let durations: Vec<f64> = m.lib.iter().map(|x| x.dur).collect();
     let plan = library::plan(args.seed, args.tracks, &durations);
     println!("Writing {} tracks in {} albums...", args.tracks, plan.len());
     let mut lib = Stats::default();
-    for s in plan
-        .par_iter()
-        .map(|a| library::write_album(out, a, &m))
-        .collect::<Result<Vec<_>>>()?
-    {
+    for s in plan.par_iter().map(|a| library::write_album(out, a, &m)).collect::<Result<Vec<_>>>()? {
         lib.merge(s);
     }
 
@@ -130,20 +119,12 @@ fn run(args: Args) -> Result<()> {
     for s in [lib, demo, gapless, loudness] {
         total.merge(s);
     }
-    let artists = plan
-        .iter()
-        .map(|a| a.album_artist.as_str())
-        .collect::<BTreeSet<_>>()
-        .len()
-        + 3;
+    let artists = plan.iter().map(|a| a.album_artist.as_str()).collect::<BTreeSet<_>>().len() + 3;
     let bytes = dir_size(out)?;
     let elapsed = start.elapsed().as_secs_f64();
 
-    let formats: serde_json::Map<String, serde_json::Value> = total
-        .formats
-        .iter()
-        .map(|(f, n)| (f.label().to_string(), json!(n)))
-        .collect();
+    let formats: serde_json::Map<String, serde_json::Value> =
+        total.formats.iter().map(|(f, n)| (f.label().to_string(), json!(n))).collect();
     let manifest = json!({
         "generator": "musinator testlib",
         "seed": args.seed,
@@ -163,32 +144,15 @@ fn run(args: Args) -> Result<()> {
         "lyrics": { "lrc_files": total.lrc, "embedded": total.lyrics_embedded },
         "gain_tags": { "replaygain_albums": total.replaygain_albums, "r128_albums": total.r128_albums },
     });
-    std::fs::write(
-        out.join("manifest.json"),
-        serde_json::to_string_pretty(&manifest)?,
-    )?;
+    std::fs::write(out.join("manifest.json"), serde_json::to_string_pretty(&manifest)?)?;
 
-    println!(
-        "\nDone in {elapsed:.1} s: {} tracks, {} albums, {artists} artists, {}",
-        total.tracks(),
-        total.albums,
-        human_size(bytes)
-    );
+    println!("\nDone in {elapsed:.1} s: {} tracks, {} albums, {artists} artists, {}", total.tracks(), total.albums, human_size(bytes));
     for (f, n) in &total.formats {
         println!("  {:<18} {n:>6}", f.label());
     }
-    println!(
-        "Covers: {} embedded, {} as files, {} none (albums)",
-        total.cover_embedded, total.cover_file, total.cover_none
-    );
-    println!(
-        "Lyrics: {} .lrc files, {} embedded",
-        total.lrc, total.lyrics_embedded
-    );
-    println!(
-        "Gain tags: {} ReplayGain albums, {} R128 albums",
-        total.replaygain_albums, total.r128_albums
-    );
+    println!("Covers: {} embedded, {} as files, {} none (albums)", total.cover_embedded, total.cover_file, total.cover_none);
+    println!("Lyrics: {} .lrc files, {} embedded", total.lrc, total.lyrics_embedded);
+    println!("Gain tags: {} ReplayGain albums, {} R128 albums", total.replaygain_albums, total.r128_albums);
     println!("Library: {}", out.display());
     Ok(())
 }
@@ -198,36 +162,23 @@ fn prepare(out: &Path) -> Result<()> {
     if out.exists() {
         if !out.join(MARKER).exists() {
             if std::fs::read_dir(out)?.next().is_some() {
-                bail!(
-                    "{} is not empty and was not made by testlib. Use another --out.",
-                    out.display()
-                );
+                bail!("{} is not empty and was not made by testlib. Use another --out.", out.display());
             }
         } else {
             let old: Vec<PathBuf> = std::fs::read_dir(out)?
                 .map(|e| e.map(|e| e.path()))
                 .collect::<std::io::Result<Vec<PathBuf>>>()?
                 .into_iter()
-                .filter(|p| {
-                    p.file_name()
-                        .is_some_and(|n| n != MASTERS_DIR && n != MARKER)
-                })
+                .filter(|p| p.file_name().is_some_and(|n| n != MASTERS_DIR && n != MARKER))
                 .collect();
             old.par_iter().try_for_each(|p| {
-                if p.is_dir() {
-                    std::fs::remove_dir_all(p)
-                } else {
-                    std::fs::remove_file(p)
-                }
-                .with_context(|| format!("remove {}", p.display()))
+                if p.is_dir() { std::fs::remove_dir_all(p) } else { std::fs::remove_file(p) }
+                    .with_context(|| format!("remove {}", p.display()))
             })?;
         }
     }
     std::fs::create_dir_all(out).with_context(|| format!("create {}", out.display()))?;
-    std::fs::write(
-        out.join(MARKER),
-        "Made by Musinator testlib. 'testlib --clean' deletes this folder.\n",
-    )?;
+    std::fs::write(out.join(MARKER), "Made by Musinator testlib. 'testlib --clean' deletes this folder.\n")?;
     Ok(())
 }
 
@@ -237,10 +188,7 @@ fn clean(out: &Path) -> Result<()> {
         return Ok(());
     }
     if !out.join(MARKER).exists() {
-        bail!(
-            "{} has no {MARKER} file, so it was not made by testlib. Not deleting it.",
-            out.display()
-        );
+        bail!("{} has no {MARKER} file, so it was not made by testlib. Not deleting it.", out.display());
     }
     std::fs::remove_dir_all(out).with_context(|| format!("delete {}", out.display()))?;
     println!("Deleted {}", out.display());
@@ -256,20 +204,12 @@ fn dir_size(dir: &Path) -> Result<u64> {
             continue;
         }
         let meta = entry.metadata()?;
-        total += if meta.is_dir() {
-            dir_size(&entry.path())?
-        } else {
-            meta.len()
-        };
+        total += if meta.is_dir() { dir_size(&entry.path())? } else { meta.len() };
     }
     Ok(total)
 }
 
 fn human_size(bytes: u64) -> String {
     let b = bytes as f64;
-    if b >= 1e9 {
-        format!("{:.2} GB", b / 1e9)
-    } else {
-        format!("{:.1} MB", b / 1e6)
-    }
+    if b >= 1e9 { format!("{:.2} GB", b / 1e9) } else { format!("{:.1} MB", b / 1e6) }
 }

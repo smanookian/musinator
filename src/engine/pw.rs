@@ -39,13 +39,11 @@ impl PwOutput {
     pub fn start(renderer: Renderer, shared: Arc<Shared>) -> Result<Self> {
         let (tx, rx) = pw::channel::channel::<Cmd>();
         let (ready_tx, ready_rx) = cb::bounded::<Result<(), String>>(1);
-        let thread = std::thread::Builder::new()
-            .name("pw-output".into())
-            .spawn(move || {
-                if let Err(e) = run(rx, renderer, shared, &ready_tx) {
-                    let _ = ready_tx.send(Err(e.to_string()));
-                }
-            })?;
+        let thread = std::thread::Builder::new().name("pw-output".into()).spawn(move || {
+            if let Err(e) = run(rx, renderer, shared, &ready_tx) {
+                let _ = ready_tx.send(Err(e.to_string()));
+            }
+        })?;
         match ready_rx.recv() {
             Ok(Ok(())) => Ok(Self { tx, thread: Some(thread) }),
             Ok(Err(e)) => Err(anyhow!("PipeWire: {e}")),
@@ -181,7 +179,14 @@ fn positions(channels: u16) -> [u32; spa::param::audio::MAX_CHANNELS] {
         3 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_LFE],
         4 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_RL, SPA_AUDIO_CHANNEL_RR],
         5 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_FC, SPA_AUDIO_CHANNEL_RL, SPA_AUDIO_CHANNEL_RR],
-        6 => &[SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR, SPA_AUDIO_CHANNEL_FC, SPA_AUDIO_CHANNEL_LFE, SPA_AUDIO_CHANNEL_RL, SPA_AUDIO_CHANNEL_RR],
+        6 => &[
+            SPA_AUDIO_CHANNEL_FL,
+            SPA_AUDIO_CHANNEL_FR,
+            SPA_AUDIO_CHANNEL_FC,
+            SPA_AUDIO_CHANNEL_LFE,
+            SPA_AUDIO_CHANNEL_RL,
+            SPA_AUDIO_CHANNEL_RR,
+        ],
         _ => &[
             SPA_AUDIO_CHANNEL_FL,
             SPA_AUDIO_CHANNEL_FR,

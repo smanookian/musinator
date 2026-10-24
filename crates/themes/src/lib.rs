@@ -9,8 +9,8 @@ mod color;
 pub mod omarchy;
 mod palettes;
 
-pub use color::{Rgb, contrast, legible};
 use color::legible_on;
+pub use color::{Rgb, contrast, legible};
 
 /// Id of the theme used when nothing else is set.
 pub const DEFAULT_ID: &str = "catppuccin-mocha";

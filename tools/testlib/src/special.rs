@@ -13,13 +13,7 @@ use std::path::Path;
 
 const TEST_YEAR: u32 = 2026;
 
-fn plain_tags<'a>(
-    title: &'a str,
-    artist: &'a str,
-    album: &'a str,
-    track: u32,
-    total: u32,
-) -> TrackTags<'a> {
+fn plain_tags<'a>(title: &'a str, artist: &'a str, album: &'a str, track: u32, total: u32) -> TrackTags<'a> {
     TrackTags {
         title,
         artist,
@@ -59,14 +53,7 @@ pub fn write_demo(root: &Path, m: &Masters) -> Result<Stats> {
                 }
             };
             let stem = sanitize(&format!("{:02} - {title}", t + 1));
-            let lrc = names::lrc(
-                &mut rng,
-                &title,
-                artist,
-                album,
-                m.demo[a][t].dur,
-                (3.5, 6.5),
-            );
+            let lrc = names::lrc(&mut rng, &title, artist, album, m.demo[a][t].dur, (3.5, 6.5));
             let tags = TrackTags {
                 genre,
                 year,
@@ -74,12 +61,7 @@ pub fn write_demo(root: &Path, m: &Masters) -> Result<Stats> {
                 gain,
                 ..plain_tags(&title, artist, album, t as u32 + 1, DEMO_TRACKS as u32)
             };
-            copy_and_tag(
-                &m.demo_path(a, t),
-                &dir.join(format!("{stem}.{}", fmt.ext())),
-                fmt,
-                &tags,
-            )?;
+            copy_and_tag(&m.demo_path(a, t), &dir.join(format!("{stem}.{}", fmt.ext())), fmt, &tags)?;
             std::fs::write(dir.join(format!("{stem}.lrc")), lrc)?;
             stats.lrc += 1;
             *stats.formats.entry(fmt).or_default() += 1;
@@ -140,10 +122,7 @@ pub fn write_gapless(root: &Path, m: &Masters) -> Result<Stats> {
         "sample_formula": "round(10^(amplitude_dbfs/20) * 32767 * sin(2*pi*frequency_hz*n/sample_rate)) / 32768, same on both channels, n from 0",
         "albums": albums_json,
     });
-    std::fs::write(
-        root.join(artist).join("gapless.json"),
-        serde_json::to_string_pretty(&doc)?,
-    )?;
+    std::fs::write(root.join(artist).join("gapless.json"), serde_json::to_string_pretty(&doc)?)?;
     Ok(stats)
 }
 
@@ -153,22 +132,13 @@ pub fn write_loudness(root: &Path, m: &Masters) -> Result<Stats> {
     let album = "Loudness Test";
     let dir = album_dir(root, artist, TEST_YEAR, album);
     std::fs::create_dir_all(&dir)?;
-    let mut stats = Stats {
-        albums: 1,
-        cover_none: 1,
-        ..Stats::default()
-    };
+    let mut stats = Stats { albums: 1, cover_none: 1, ..Stats::default() };
     let mut tracks_json = Vec::new();
     let total = LOUDNESS_TRACKS.len() as u32;
     for (i, &(signal, target)) in LOUDNESS_TRACKS.iter().enumerate() {
         let title = format!("{} at {target} LUFS", capitalize(signal.name()));
         let file = format!("{:02} - {title}.{}", i + 1, LOUDNESS_FMT.ext());
-        copy_and_tag(
-            &m.loudness_path(i),
-            &dir.join(&file),
-            LOUDNESS_FMT,
-            &plain_tags(&title, artist, album, i as u32 + 1, total),
-        )?;
+        copy_and_tag(&m.loudness_path(i), &dir.join(&file), LOUDNESS_FMT, &plain_tags(&title, artist, album, i as u32 + 1, total))?;
         *stats.formats.entry(LOUDNESS_FMT).or_default() += 1;
         let measured = m.loudness[i];
         tracks_json.push(json!({
@@ -185,16 +155,11 @@ pub fn write_loudness(root: &Path, m: &Masters) -> Result<Stats> {
         "format": LOUDNESS_FMT.label(),
         "tracks": tracks_json,
     });
-    std::fs::write(
-        root.join(artist).join("loudness.json"),
-        serde_json::to_string_pretty(&doc)?,
-    )?;
+    std::fs::write(root.join(artist).join("loudness.json"), serde_json::to_string_pretty(&doc)?)?;
     Ok(stats)
 }
 
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
-    c.next()
-        .map(|f| f.to_uppercase().chain(c).collect())
-        .unwrap_or_default()
+    c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }

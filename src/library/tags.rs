@@ -59,7 +59,10 @@ pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
         FileType::Wav => "WAV",
         FileType::Aiff => "AIFF",
         FileType::Mp4 => {
-            match lofty::mp4::Mp4File::read_from(&mut std::fs::File::open(path)?, Default::default()).ok().and_then(|m| m.properties().codec()) {
+            match lofty::mp4::Mp4File::read_from(&mut std::fs::File::open(path)?, Default::default())
+                .ok()
+                .and_then(|m| m.properties().codec())
+            {
                 Some(lofty::mp4::Mp4Codec::ALAC) => "ALAC",
                 Some(lofty::mp4::Mp4Codec::FLAC) => "FLAC",
                 Some(lofty::mp4::Mp4Codec::MP3) => "MP3",
@@ -107,7 +110,8 @@ pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
             r.rg_album = r128(ItemKey::R128AlbumGain);
         }
         r.embedded_art = !t.pictures().is_empty();
-        r.embedded_lyrics = t.get_string(ItemKey::Lyrics).or_else(|| t.get_string(ItemKey::UnsyncLyrics)).is_some_and(|l| !l.trim().is_empty());
+        r.embedded_lyrics =
+            t.get_string(ItemKey::Lyrics).or_else(|| t.get_string(ItemKey::UnsyncLyrics)).is_some_and(|l| !l.trim().is_empty());
     }
     Ok(r)
 }

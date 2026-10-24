@@ -13,11 +13,7 @@ pub struct Stereo {
 
 impl Stereo {
     pub fn silent(sr: u32, frames: usize) -> Self {
-        Stereo {
-            sr,
-            l: vec![0.0; frames],
-            r: vec![0.0; frames],
-        }
+        Stereo { sr, l: vec![0.0; frames], r: vec![0.0; frames] }
     }
 
     pub fn frames(&self) -> usize {
@@ -25,10 +21,7 @@ impl Stereo {
     }
 
     pub fn peak(&self) -> f32 {
-        self.l
-            .iter()
-            .chain(&self.r)
-            .fold(0.0f32, |m, &v| m.max(v.abs()))
+        self.l.iter().chain(&self.r).fold(0.0f32, |m, &v| m.max(v.abs()))
     }
 
     pub fn gain(&mut self, g: f32) {
@@ -119,10 +112,7 @@ static TABLES: LazyLock<[Vec<f32>; 4]> = LazyLock::new(|| {
         let mut t: Vec<f32> = (0..=TABLE)
             .map(|i| {
                 let x = TAU * i as f64 / TABLE as f64;
-                harm.iter()
-                    .enumerate()
-                    .map(|(k, &a)| a as f64 * ((k + 1) as f64 * x).sin())
-                    .sum::<f64>() as f32
+                harm.iter().enumerate().map(|(k, &a)| a as f64 * ((k + 1) as f64 * x).sin()).sum::<f64>() as f32
             })
             .collect();
         let p = t.iter().fold(0.0f32, |m, v| m.max(v.abs()));
@@ -152,11 +142,7 @@ fn tonal_env(inst: Inst, t: f64, dur: f64) -> f32 {
         _ => (0.02, 0.85),
     };
     let att = if t < attack { t / attack } else { 1.0 };
-    let rel = if t > dur {
-        (1.0 - (t - dur) / inst.release()).max(0.0)
-    } else {
-        1.0
-    };
+    let rel = if t > dur { (1.0 - (t - dur) / inst.release()).max(0.0) } else { 1.0 };
     (att * body * rel) as f32
 }
 
@@ -198,11 +184,7 @@ fn render_note(n: &Note, buf: &mut Stereo, seed: u64) {
                 let t = i as f64 / sr;
                 let v = lookup(table, phase) * tonal_env(n.inst, t, n.dur);
                 put(i, v);
-                let step = if n.inst == Inst::Lead {
-                    inc * (1.0 + 0.004 * (TAU * 5.5 * t).sin() * (t / 0.4).min(1.0))
-                } else {
-                    inc
-                };
+                let step = if n.inst == Inst::Lead { inc * (1.0 + 0.004 * (TAU * 5.5 * t).sin() * (t / 0.4).min(1.0)) } else { inc };
                 phase += step;
                 if phase >= 1.0 {
                     phase -= 1.0;
@@ -216,10 +198,7 @@ fn render_note(n: &Note, buf: &mut Stereo, seed: u64) {
                 let t = i as f64 / sr;
                 let f = 48.0 + 120.0 * (-t * 28.0).exp();
                 let click = if t < 0.002 { noise.next() * 0.3 } else { 0.0 };
-                put(
-                    i,
-                    (TAU * phase).sin() as f32 * (-t * 9.0).exp() as f32 + click,
-                );
+                put(i, (TAU * phase).sin() as f32 * (-t * 9.0).exp() as f32 + click);
                 phase += f / sr;
             }
         }
@@ -269,15 +248,7 @@ struct Noise {
 impl Noise {
     fn new(seed: u64, sr: u32, highpass: bool) -> Self {
         let step = (44_100.0 / sr as f64).min(1.0);
-        let mut n = Noise {
-            rng: Rng::new(seed ^ 0x5eed),
-            step,
-            pos: 0.0,
-            a: 0.0,
-            b: 0.0,
-            last: 0.0,
-            highpass,
-        };
+        let mut n = Noise { rng: Rng::new(seed ^ 0x5eed), step, pos: 0.0, a: 0.0, b: 0.0, last: 0.0, highpass };
         n.b = n.draw();
         n
     }
@@ -317,11 +288,7 @@ pub fn render(notes: &[Note], sr: u32, frames: usize, bpm: f64, seed: u64) -> St
     let mut dl = vec![0.0f32; frames];
     let mut dr = vec![0.0f32; frames];
     for i in 0..frames {
-        let (pl, pr) = if i >= d {
-            (dl[i - d], dr[i - d])
-        } else {
-            (0.0, 0.0)
-        };
+        let (pl, pr) = if i >= d { (dl[i - d], dr[i - d]) } else { (0.0, 0.0) };
         dl[i] = wet.l[i] + fb * pr;
         dr[i] = wet.r[i] + fb * pl;
         dry.l[i] += wet.l[i] + mix * pl;
@@ -341,22 +308,8 @@ pub struct Layers {
 }
 
 impl Layers {
-    pub const fn new(
-        pad: bool,
-        bass: bool,
-        drums: bool,
-        arp: bool,
-        lead: bool,
-        swell: bool,
-    ) -> Self {
-        Layers {
-            pad,
-            bass,
-            drums,
-            arp,
-            lead,
-            swell,
-        }
+    pub const fn new(pad: bool, bass: bool, drums: bool, arp: bool, lead: bool, swell: bool) -> Self {
+        Layers { pad, bass, drums, arp, lead, swell }
     }
 }
 
@@ -376,14 +329,7 @@ pub struct Song {
     pub width: f32,
 }
 
-const PROGS: [[i32; 4]; 6] = [
-    [0, 4, 5, 3],
-    [0, 5, 3, 4],
-    [5, 3, 0, 4],
-    [0, 3, 4, 3],
-    [0, 2, 5, 4],
-    [1, 4, 0, 0],
-];
+const PROGS: [[i32; 4]; 6] = [[0, 4, 5, 3], [0, 5, 3, 4], [5, 3, 0, 4], [0, 3, 4, 3], [0, 2, 5, 4], [1, 4, 0, 0]];
 const MAJOR: [i32; 7] = [0, 2, 4, 5, 7, 9, 11];
 const MINOR: [i32; 7] = [0, 2, 3, 5, 7, 8, 10];
 
@@ -408,11 +354,7 @@ fn section_layers(bar: usize, bars: usize) -> Layers {
         return Layers::new(true, false, false, true, false, false);
     }
     let sec = bar / 8;
-    SECTIONS[if sec < SECTIONS.len() {
-        sec
-    } else {
-        2 + (sec - 2) % 4
-    }]
+    SECTIONS[if sec < SECTIONS.len() { sec } else { 2 + (sec - 2) % 4 }]
 }
 
 pub fn compose(s: &Song) -> Vec<Note> {
@@ -435,11 +377,7 @@ pub fn compose(s: &Song) -> Vec<Note> {
 
     for b in 0..bars {
         let t0 = b as f64 * bar;
-        let layers = if s.arranged {
-            section_layers(b, bars)
-        } else {
-            s.layers
-        };
+        let layers = if s.arranged { section_layers(b, bars) } else { s.layers };
         let deg = prog[b % 4];
         let mut chord = vec![deg, deg + 2, deg + 4];
         if seventh {
@@ -449,14 +387,7 @@ pub fn compose(s: &Song) -> Vec<Note> {
             for &c in &chord {
                 let f = mfreq(degree_note(s.root + 12, scale, c));
                 for (detune, pan) in [(0.9985, -0.6), (1.0015, 0.6)] {
-                    notes.push(Note {
-                        t: t0,
-                        dur: bar + 0.05,
-                        freq: f * detune,
-                        amp: 0.10,
-                        pan,
-                        inst: Inst::Pad,
-                    });
+                    notes.push(Note { t: t0, dur: bar + 0.05, freq: f * detune, amp: 0.10, pan, inst: Inst::Pad });
                 }
             }
         }
@@ -465,27 +396,13 @@ pub fn compose(s: &Song) -> Vec<Note> {
             for (step, &on) in bass_pattern.iter().enumerate() {
                 if on {
                     let t = t0 + step as f64 * beat / 2.0;
-                    notes.push(Note {
-                        t,
-                        dur: beat / 2.0 * 0.9,
-                        freq: f,
-                        amp: 0.32,
-                        pan: 0.0,
-                        inst: Inst::Bass,
-                    });
+                    notes.push(Note { t, dur: beat / 2.0 * 0.9, freq: f, amp: 0.32, pan: 0.0, inst: Inst::Bass });
                 }
             }
         }
         if layers.drums {
             let mut hit = |t: f64, amp: f32, pan: f32, inst: Inst| {
-                notes.push(Note {
-                    t,
-                    dur: 0.1,
-                    freq: 0.0,
-                    amp,
-                    pan,
-                    inst,
-                });
+                notes.push(Note { t, dur: 0.1, freq: 0.0, amp, pan, inst });
             };
             hit(t0, 0.9, 0.0, Inst::Kick);
             hit(t0 + 2.0 * beat, 0.9, 0.0, Inst::Kick);
@@ -503,22 +420,11 @@ pub fn compose(s: &Song) -> Vec<Note> {
             let steps = 4 * arp_rate;
             let step_len = bar / steps as f64;
             for i in 0..steps {
-                let k = if arp_down {
-                    chord.len() - 1 - i % chord.len()
-                } else {
-                    i % chord.len()
-                };
+                let k = if arp_down { chord.len() - 1 - i % chord.len() } else { i % chord.len() };
                 let octave = if (i / chord.len()) % 2 == 1 { 7 } else { 0 };
                 let f = mfreq(degree_note(s.root + 24, scale, chord[k] + octave));
                 let pan = if i % 2 == 0 { -0.35 } else { 0.35 };
-                notes.push(Note {
-                    t: t0 + i as f64 * step_len,
-                    dur: step_len * 0.9,
-                    freq: f,
-                    amp: 0.09,
-                    pan,
-                    inst: Inst::Pluck,
-                });
+                notes.push(Note { t: t0 + i as f64 * step_len, dur: step_len * 0.9, freq: f, amp: 0.09, pan, inst: Inst::Pluck });
             }
         }
         if layers.lead {
@@ -526,11 +432,7 @@ pub fn compose(s: &Song) -> Vec<Note> {
             while beat_i < 4 {
                 let len = if rng.chance(0.3) && beat_i < 3 { 2 } else { 1 };
                 if rng.chance(0.75) {
-                    lead_deg = if beat_i == 0 {
-                        deg + 7
-                    } else {
-                        (lead_deg + *rng.pick(&[-2, -1, 1, 1, 2])).clamp(4, 14)
-                    };
+                    lead_deg = if beat_i == 0 { deg + 7 } else { (lead_deg + *rng.pick(&[-2, -1, 1, 1, 2])).clamp(4, 14) };
                     let f = mfreq(degree_note(s.root + 12, scale, lead_deg));
                     notes.push(Note {
                         t: t0 + beat_i as f64 * beat,
@@ -545,14 +447,7 @@ pub fn compose(s: &Song) -> Vec<Note> {
             }
         }
         if layers.swell && b % 4 == 0 {
-            notes.push(Note {
-                t: t0,
-                dur: 2.0 * bar,
-                freq: 0.0,
-                amp: 0.07,
-                pan: 0.0,
-                inst: Inst::Swell,
-            });
+            notes.push(Note { t: t0, dur: 2.0 * bar, freq: 0.0, amp: 0.07, pan: 0.0, inst: Inst::Swell });
         }
     }
     notes.retain(|n| n.t < s.dur);
@@ -605,14 +500,8 @@ pub fn pink_noise(sr: u32, frames: usize, seed: u64) -> Stereo {
 
 /// Same sine on both channels.
 pub fn sine(sr: u32, frames: usize, freq: f64, amp: f32) -> Stereo {
-    let l: Vec<f32> = (0..frames)
-        .map(|n| amp * (TAU * freq * n as f64 / sr as f64).sin() as f32)
-        .collect();
-    let mut s = Stereo {
-        sr,
-        r: l.clone(),
-        l,
-    };
+    let l: Vec<f32> = (0..frames).map(|n| amp * (TAU * freq * n as f64 / sr as f64).sin() as f32).collect();
+    let mut s = Stereo { sr, r: l.clone(), l };
     s.fade(0.01, 0.01);
     s
 }

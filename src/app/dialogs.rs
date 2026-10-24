@@ -346,7 +346,11 @@ impl Dialog {
                                     InputFor::NewPlaylistWith { nodes: std::mem::take(nodes), tracks: std::mem::take(tracks) },
                                 ));
                             }
-                            Some(id) => app.send_job(Job::Tracks { nodes: std::mem::take(nodes), tracks: std::mem::take(tracks), then: Then::AddToPlaylist(id) }),
+                            Some(id) => app.send_job(Job::Tracks {
+                                nodes: std::mem::take(nodes),
+                                tracks: std::mem::take(tracks),
+                                then: Then::AddToPlaylist(id),
+                            }),
                         }
                         return false;
                     }
@@ -405,7 +409,14 @@ impl Dialog {
                 let b = f.buffer_mut();
                 let field = Rect { x: inner.x + 2, y: inner.y + 1, width: inner.width - 4, height: 1 };
                 fill(b, field, t.title_bar);
-                put(b, field.x + 1, field.y, &format!("/ {}▏", tail(input, field.width as usize - 4)), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
+                put(
+                    b,
+                    field.x + 1,
+                    field.y,
+                    &format!("/ {}▏", tail(input, field.width as usize - 4)),
+                    field.width - 1,
+                    Style::default().fg(c(t.fg)).bg(c(t.title_bar)),
+                );
                 let hits = flat_hits(app);
                 let list = Rect { x: inner.x + 1, y: inner.y + 3, width: inner.width - 2, height: inner.height.saturating_sub(5) };
                 if input.trim().is_empty() {
@@ -443,7 +454,14 @@ impl Dialog {
                             let sel = *i == *cursor;
                             sel_row(f, app, list, y, &title, sel);
                             let bg = if sel { t.selection } else { t.dialog_bg };
-                            put_right(f.buffer_mut(), list.x + list.width - 1, y, &right, list.width / 2, Style::default().fg(c(t.muted)).bg(c(bg)));
+                            put_right(
+                                f.buffer_mut(),
+                                list.x + list.width - 1,
+                                y,
+                                &right,
+                                list.width / 2,
+                                Style::default().fg(c(t.muted)).bg(c(bg)),
+                            );
                         }
                     }
                 }
@@ -506,7 +524,14 @@ impl Dialog {
                         Kind::Toggle | Kind::Choice(_) | Kind::Number { .. } => format!("‹ {} ›", app.cfg.display(s.key)),
                     };
                     let bg = if sel { t.selection } else { t.dialog_bg };
-                    put_right(f.buffer_mut(), rr.x + rr.width - 1, y, &v, rr.width / 2, Style::default().fg(c(if sel { t.selection_fg } else { t.accent })).bg(c(bg)));
+                    put_right(
+                        f.buffer_mut(),
+                        rr.x + rr.width - 1,
+                        y,
+                        &v,
+                        rr.width / 2,
+                        Style::default().fg(c(if sel { t.selection_fg } else { t.accent })).bg(c(bg)),
+                    );
                 }
                 if let Some(s) = rows.get(*row).filter(|_| *right) {
                     put(f.buffer_mut(), rr.x + 1, inner.y + inner.height - 2, s.help, rr.width - 2, muted);
@@ -520,7 +545,14 @@ impl Dialog {
                 let b = f.buffer_mut();
                 let field = Rect { x: inner.x + 2, y: inner.y + 1, width: inner.width - 4, height: 1 };
                 fill(b, field, t.title_bar);
-                put(b, field.x + 1, field.y, &format!("filter: {}▏", filter), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
+                put(
+                    b,
+                    field.x + 1,
+                    field.y,
+                    &format!("filter: {}▏", filter),
+                    field.width - 1,
+                    Style::default().fg(c(t.fg)).bg(c(t.title_bar)),
+                );
                 let lines = help_lines(&app.keys, filter);
                 let n = inner.height.saturating_sub(5) as usize;
                 *offset = (*offset).min(lines.len().saturating_sub(n));
@@ -553,7 +585,14 @@ impl Dialog {
                     let keys = app.keys.keys(a.action).iter().map(|c| c.to_string()).collect::<Vec<_>>().join("  ");
                     let custom = app.cfg.keys.contains_key(a.id);
                     let bg = if k == *cursor { t.selection } else { t.dialog_bg };
-                    put_right(f.buffer_mut(), inner.x + inner.width - 2, y, &keys, 20, Style::default().fg(c(if custom { t.warn } else { t.accent })).bg(c(bg)));
+                    put_right(
+                        f.buffer_mut(),
+                        inner.x + inner.width - 2,
+                        y,
+                        &keys,
+                        20,
+                        Style::default().fg(c(if custom { t.warn } else { t.accent })).bg(c(bg)),
+                    );
                 }
                 let line = msg.clone().unwrap_or_else(|| "enter set key · r reset · esc close".into());
                 hints_row(f.buffer_mut(), inner, &line, muted);
@@ -635,7 +674,10 @@ fn frame(f: &mut Frame, app: &App, w: u16, h: u16, title: &str) -> Rect {
         .border_type(kind)
         .border_style(Style::default().fg(c(t.accent)).bg(c(t.dialog_bg)))
         .style(Style::default().bg(c(t.dialog_bg)).fg(c(t.fg)))
-        .title(ratatui::text::Span::styled(format!(" {title} "), Style::default().fg(c(t.accent)).bg(c(t.dialog_bg)).add_modifier(Modifier::BOLD)));
+        .title(ratatui::text::Span::styled(
+            format!(" {title} "),
+            Style::default().fg(c(t.accent)).bg(c(t.dialog_bg)).add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(r);
     f.render_widget(block, r);
     inner
@@ -686,7 +728,10 @@ fn section_of(i: &Item) -> &'static str {
 
 fn hit_text(i: &Item) -> (String, String) {
     match i {
-        Item::Track(t) => (t.display_title().to_string(), format!("{} · {}  {}", t.display_artist(), t.album, t.duration_ms.map(fmt_time).unwrap_or_default())),
+        Item::Track(t) => (
+            t.display_title().to_string(),
+            format!("{} · {}  {}", t.display_artist(), t.album, t.duration_ms.map(fmt_time).unwrap_or_default()),
+        ),
         Item::Node(n) => (n.title.clone(), n.subtitle.clone()),
     }
 }

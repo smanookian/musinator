@@ -90,12 +90,7 @@ impl FileStream {
 
     fn from_reader(reader: Box<dyn FormatReader>, size: u64, mp4: Option<Mp4Gapless>) -> Result<Self> {
         let track = reader.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
-        let params = track
-            .codec_params
-            .as_ref()
-            .and_then(|p| p.audio())
-            .ok_or_else(|| anyhow!("no audio codec parameters"))?
-            .clone();
+        let params = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or_else(|| anyhow!("no audio codec parameters"))?.clone();
         let track_id = track.id;
         let mut frames = track.num_frames;
         let delay = track.delay.unwrap_or(0) as u64;
@@ -116,12 +111,7 @@ impl FileStream {
                 n => bail!("Opus with {n} channels is not supported"),
             };
             // OpusHead output gain: bytes 16..18, Q7.8 dB.
-            let gain_q78 = params
-                .extra_data
-                .as_ref()
-                .filter(|d| d.len() >= 18)
-                .map(|d| i16::from_le_bytes([d[16], d[17]]))
-                .unwrap_or(0);
+            let gain_q78 = params.extra_data.as_ref().filter(|d| d.len() >= 18).map(|d| i16::from_le_bytes([d[16], d[17]])).unwrap_or(0);
             // symphonia reports the pre-skip as track delay; we drop it like MP4 priming.
             opus_preskip = delay;
             Dec::Opus {

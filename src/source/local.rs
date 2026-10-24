@@ -201,7 +201,9 @@ impl Source for LocalSource {
         let c = self.conn.lock();
         let like = format!("%{}%", q.replace('%', "").replace('_', ""));
         let mut hits = SearchHits::default();
-        let mut st = c.prepare_cached("SELECT artist, COUNT(*) FROM albums WHERE artist LIKE ?1 GROUP BY lower(artist) ORDER BY lower(artist) LIMIT ?2")?;
+        let mut st = c.prepare_cached(
+            "SELECT artist, COUNT(*) FROM albums WHERE artist LIKE ?1 GROUP BY lower(artist) ORDER BY lower(artist) LIMIT ?2",
+        )?;
         hits.artists = st
             .query_map(params![like, limit as i64], |r| {
                 Ok(Node {
@@ -269,4 +271,3 @@ impl Source for LocalSource {
         Ok(text.map(|t| lrc::parse(&t)).filter(|l| !l.is_empty()))
     }
 }
-

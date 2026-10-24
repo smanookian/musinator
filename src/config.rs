@@ -131,7 +131,12 @@ impl Config {
 pub enum Kind {
     Toggle,
     Choice(&'static [(&'static str, &'static str)]),
-    Number { min: f64, max: f64, step: f64, unit: &'static str },
+    Number {
+        min: f64,
+        max: f64,
+        step: f64,
+        unit: &'static str,
+    },
     /// Opens a picker or editor.
     Open,
 }
@@ -154,28 +159,82 @@ macro_rules! s {
 
 pub const SETTINGS: &[Setting] = &[
     s!("theme", "Appearance", "Theme", "Colors. Match Omarchy follows your desktop theme.", Kind::Open),
-    s!("density", "Appearance", "Density", "Compact or comfortable list spacing.", Kind::Choice(&[("compact", "Compact"), ("comfortable", "Comfortable")])),
+    s!(
+        "density",
+        "Appearance",
+        "Density",
+        "Compact or comfortable list spacing.",
+        Kind::Choice(&[("compact", "Compact"), ("comfortable", "Comfortable")])
+    ),
     s!("corners", "Appearance", "Pane corners", "Round or square pane corners.", Kind::Choice(&[("round", "Round"), ("square", "Square")])),
     s!("shadow", "Appearance", "Dialog shadow", "Soft shadow under floating dialogs.", Kind::Toggle),
-    s!("images", "Appearance", "Album art", "Auto: real images on Kitty/Ghostty, half-blocks elsewhere.", Kind::Choice(&[("auto", "Auto"), ("kitty", "Kitty images"), ("halfblocks", "Half-blocks"), ("off", "Off")])),
+    s!(
+        "images",
+        "Appearance",
+        "Album art",
+        "Auto: real images on Kitty/Ghostty, half-blocks elsewhere.",
+        Kind::Choice(&[("auto", "Auto"), ("kitty", "Kitty images"), ("halfblocks", "Half-blocks"), ("off", "Off")])
+    ),
     s!("album_grid", "Appearance", "Albums as grid", "Show albums as a grid of covers.", Kind::Toggle),
     s!("visualizer", "Appearance", "Visualizer", "Spectrum from the real audio.", Kind::Toggle),
-    s!("viz_fps", "Appearance", "Visualizer speed", "Frames per second. Lower uses less CPU.", Kind::Number { min: 10.0, max: 60.0, step: 5.0, unit: "fps" }),
+    s!(
+        "viz_fps",
+        "Appearance",
+        "Visualizer speed",
+        "Frames per second. Lower uses less CPU.",
+        Kind::Number { min: 10.0, max: 60.0, step: 5.0, unit: "fps" }
+    ),
     s!("lyrics", "Appearance", "Lyrics", "Show synced lyrics on Now Playing when a song has them.", Kind::Toggle),
     s!("confirm_quit", "Playback", "Confirm before quitting", "Ask before Musinator closes.", Kind::Toggle),
     s!("seek_small", "Playback", "Seek step", "Seconds for ← and →.", Kind::Number { min: 1.0, max: 30.0, step: 1.0, unit: "s" }),
-    s!("seek_big", "Playback", "Big seek step", "Seconds for shift+← and shift+→.", Kind::Number { min: 5.0, max: 120.0, step: 5.0, unit: "s" }),
-    s!("rg_mode", "Audio", "ReplayGain", "Auto uses album gain when you play an album, else track gain.", Kind::Choice(&[("auto", "Auto"), ("track", "Track"), ("album", "Album"), ("off", "Off")])),
-    s!("rg_preamp", "Audio", "ReplayGain preamp", "Added to every ReplayGain value.", Kind::Number { min: -15.0, max: 15.0, step: 0.5, unit: "dB" }),
-    s!("rg_fallback", "Audio", "Gain without info", "Gain for files with no loudness info.", Kind::Number { min: -15.0, max: 0.0, step: 0.5, unit: "dB" }),
+    s!(
+        "seek_big",
+        "Playback",
+        "Big seek step",
+        "Seconds for shift+← and shift+→.",
+        Kind::Number { min: 5.0, max: 120.0, step: 5.0, unit: "s" }
+    ),
+    s!(
+        "rg_mode",
+        "Audio",
+        "ReplayGain",
+        "Auto uses album gain when you play an album, else track gain.",
+        Kind::Choice(&[("auto", "Auto"), ("track", "Track"), ("album", "Album"), ("off", "Off")])
+    ),
+    s!(
+        "rg_preamp",
+        "Audio",
+        "ReplayGain preamp",
+        "Added to every ReplayGain value.",
+        Kind::Number { min: -15.0, max: 15.0, step: 0.5, unit: "dB" }
+    ),
+    s!(
+        "rg_fallback",
+        "Audio",
+        "Gain without info",
+        "Gain for files with no loudness info.",
+        Kind::Number { min: -15.0, max: 0.0, step: 0.5, unit: "dB" }
+    ),
     s!("prevent_clip", "Audio", "Prevent clipping", "Lower the gain so peaks stay below 0 dBFS.", Kind::Toggle),
-    s!("rate_switching", "Audio", "PipeWire rate switching", "Lets PipeWire run at the file's rate (bit-perfect). Writes ~/.config/pipewire/pipewire.conf.d/50-musinator.conf.", Kind::Toggle),
+    s!(
+        "rate_switching",
+        "Audio",
+        "PipeWire rate switching",
+        "Lets PipeWire run at the file's rate (bit-perfect). Writes ~/.config/pipewire/pipewire.conf.d/50-musinator.conf.",
+        Kind::Toggle
+    ),
     s!("music_folders", "Library", "Music folders", "Folders to scan. Enter to edit.", Kind::Open),
     s!("watch_folders", "Library", "Watch for changes", "Rescan when files change.", Kind::Toggle),
     s!("measure_loudness", "Library", "Measure loudness", "Measure EBU R128 loudness for files without ReplayGain tags.", Kind::Toggle),
     s!("rescan", "Library", "Rescan now", "Scan the music folders again.", Kind::Open),
     s!("import_playlist", "Library", "Import playlist", "Import an .m3u8 file.", Kind::Open),
-    s!("omarchy_bar", "Desktop", "Show in Omarchy bar", "Adds the playing song to the Omarchy bar (backs up shell.json first).", Kind::Toggle),
+    s!(
+        "omarchy_bar",
+        "Desktop",
+        "Show in Omarchy bar",
+        "Adds the playing song to the Omarchy bar (backs up shell.json first).",
+        Kind::Toggle
+    ),
     s!("mpris", "Desktop", "Media keys (MPRIS)", "Media keys, playerctl and the Omarchy media controls.", Kind::Toggle),
     s!("notifications", "Desktop", "Notify on track change", "Desktop notification when a new song starts.", Kind::Toggle),
     s!("keys", "Keys", "Remap keys", "Change the key for any action.", Kind::Open),
@@ -316,7 +375,12 @@ mod tests {
 
     #[test]
     fn saves_and_loads() {
-        let c = Config { theme: "nord".into(), volume: 0.3, keys: HashMap::from([("next".into(), vec!["ctrl+n".into()])]), ..Default::default() };
+        let c = Config {
+            theme: "nord".into(),
+            volume: 0.3,
+            keys: HashMap::from([("next".into(), vec!["ctrl+n".into()])]),
+            ..Default::default()
+        };
         let back: Config = toml::from_str(&toml::to_string_pretty(&c).unwrap()).unwrap();
         assert_eq!(back, c);
     }

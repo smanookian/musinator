@@ -86,7 +86,13 @@ mod tests {
         let music = dir.path().join("Music/A/x.flac");
         let pl = dir.path().join("lists/mix.m3u8");
         std::fs::create_dir_all(pl.parent().unwrap()).unwrap();
-        let t = Track { r: Some(TrackRef::new(&Arc::from("local"), music.to_string_lossy())), title: "X".into(), artist: "Y".into(), duration_ms: Some(61_000), ..Default::default() };
+        let t = Track {
+            r: Some(TrackRef::new(&Arc::from("local"), music.to_string_lossy())),
+            title: "X".into(),
+            artist: "Y".into(),
+            duration_ms: Some(61_000),
+            ..Default::default()
+        };
         export(&pl, &[Arc::new(t)]).unwrap();
         let text = std::fs::read_to_string(&pl).unwrap();
         assert!(text.contains("#EXTINF:61,Y - X\n../Music/A/x.flac\n"), "{text}");

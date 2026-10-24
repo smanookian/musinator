@@ -28,7 +28,16 @@ impl Viz {
         let fft = FftPlanner::new().plan_fft_forward(N);
         let scratch = vec![Complex::default(); fft.get_inplace_scratch_len()];
         let window = (0..N).map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / N as f32).cos()).collect();
-        Self { fft, window, samples: vec![0.0; N], buf: vec![Complex::default(); N], scratch, mags: vec![0.0; N / 2], bars: Vec::new(), last_written: 0 }
+        Self {
+            fft,
+            window,
+            samples: vec![0.0; N],
+            buf: vec![Complex::default(); N],
+            scratch,
+            mags: vec![0.0; N / 2],
+            bars: Vec::new(),
+            last_written: 0,
+        }
     }
 
     /// Update `bars` (0..=1). Returns true while anything is still moving.
@@ -69,8 +78,8 @@ impl Viz {
             let b0 = (f0 / bin_hz) as usize;
             let b1 = ((f1 / bin_hz) as usize).max(b0 + 1).min(self.mags.len());
             let peak = self.mags[b0.min(self.mags.len() - 1)..b1].iter().fold(0.0f32, |a, b| a.max(*b));
-            // Gentle tilt so highs are visible (music falls ~3 dB/oct).
-            let tilt = 3.0 * (f0 / 1000.0).log2().max(-3.0);
+            // Gentle tilt so highs stay visible (music falls off with frequency).
+            let tilt = (1.5 * (f0 / 1000.0).log2()).clamp(-4.5, 6.0);
             let db = 20.0 * peak.max(1e-9).log10() + tilt;
             let v = ((db - FLOOR_DB) / (TOP_DB - FLOOR_DB)).clamp(0.0, 1.0);
             if v > *bar {

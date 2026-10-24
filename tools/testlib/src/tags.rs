@@ -68,38 +68,17 @@ pub fn write(path: &Path, fmt: Fmt, t: &TrackTags) -> Result<()> {
         tag.insert_text(ItemKey::FlagCompilation, "1".to_string());
     }
     if let Some((data, mime)) = &t.cover {
-        tag.push_picture(
-            Picture::unchecked(data.to_vec())
-                .pic_type(PictureType::CoverFront)
-                .mime_type(mime.clone())
-                .build(),
-        );
+        tag.push_picture(Picture::unchecked(data.to_vec()).pic_type(PictureType::CoverFront).mime_type(mime.clone()).build());
     }
     if let Some(lyrics) = t.lyrics {
-        let key = if tag_type == TagType::Id3v2 {
-            ItemKey::UnsyncLyrics
-        } else {
-            ItemKey::Lyrics
-        };
+        let key = if tag_type == TagType::Id3v2 { ItemKey::UnsyncLyrics } else { ItemKey::Lyrics };
         tag.insert_text(key, lyrics.to_string());
     }
     if let GainTags::ReplayGain(rg) = t.gain {
-        tag.insert_text(
-            ItemKey::ReplayGainTrackGain,
-            format!("{:+.2} dB", rg.track_gain),
-        );
-        tag.insert_text(
-            ItemKey::ReplayGainTrackPeak,
-            format!("{:.6}", rg.track_peak),
-        );
-        tag.insert_text(
-            ItemKey::ReplayGainAlbumGain,
-            format!("{:+.2} dB", rg.album_gain),
-        );
-        tag.insert_text(
-            ItemKey::ReplayGainAlbumPeak,
-            format!("{:.6}", rg.album_peak),
-        );
+        tag.insert_text(ItemKey::ReplayGainTrackGain, format!("{:+.2} dB", rg.track_gain));
+        tag.insert_text(ItemKey::ReplayGainTrackPeak, format!("{:.6}", rg.track_peak));
+        tag.insert_text(ItemKey::ReplayGainAlbumGain, format!("{:+.2} dB", rg.album_gain));
+        tag.insert_text(ItemKey::ReplayGainAlbumPeak, format!("{:.6}", rg.album_peak));
     }
 
     let opts = WriteOptions::default();
@@ -114,9 +93,7 @@ pub fn write(path: &Path, fmt: Fmt, t: &TrackTags) -> Result<()> {
             vc.save_to_path(path, opts).with_context(ctx)?;
         }
         TagKind::Wav => {
-            sorted_id3v2(tag)
-                .save_to_path(path, opts)
-                .with_context(ctx)?;
+            sorted_id3v2(tag).save_to_path(path, opts).with_context(ctx)?;
             let mut info = Tag::new(TagType::RiffInfo);
             info.set_title(t.title.to_string());
             info.set_artist(t.artist.to_string());
@@ -126,9 +103,7 @@ pub fn write(path: &Path, fmt: Fmt, t: &TrackTags) -> Result<()> {
             info.insert_text(ItemKey::RecordingDate, t.year.to_string());
             info.save_to_path(path, opts).with_context(ctx)?;
         }
-        TagKind::Id3v2 => sorted_id3v2(tag)
-            .save_to_path(path, opts)
-            .with_context(ctx)?,
+        TagKind::Id3v2 => sorted_id3v2(tag).save_to_path(path, opts).with_context(ctx)?,
         TagKind::Mp4 => tag.save_to_path(path, opts).with_context(ctx)?,
     }
     Ok(())
@@ -139,11 +114,7 @@ pub fn write(path: &Path, fmt: Fmt, t: &TrackTags) -> Result<()> {
 fn sorted_id3v2(tag: Tag) -> Id3v2Tag {
     let mut frames: Vec<Frame<'static>> = Id3v2Tag::from(tag).into_iter().collect();
     frames.sort_by_cached_key(|f| {
-        let desc = if let Frame::UserText(t) = f {
-            t.description.to_string()
-        } else {
-            String::new()
-        };
+        let desc = if let Frame::UserText(t) = f { t.description.to_string() } else { String::new() };
         (f.id_str().to_string(), desc)
     });
     let mut out = Id3v2Tag::new();

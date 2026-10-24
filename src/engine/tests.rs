@@ -169,10 +169,8 @@ fn play_all(files: &[PathBuf]) -> Vec<f32> {
         Ok(Box::new(Capture::start(r, cap2)))
     })
     .unwrap();
-    let tracks: Vec<Arc<Track>> = files
-        .iter()
-        .map(|p| Arc::new(Track { r: Some(TrackRef::new(src.id(), p.to_string_lossy())), ..Default::default() }))
-        .collect();
+    let tracks: Vec<Arc<Track>> =
+        files.iter().map(|p| Arc::new(Track { r: Some(TrackRef::new(src.id(), p.to_string_lossy())), ..Default::default() })).collect();
     let first = engine.queue.lock().replace(tracks, None, 0).unwrap();
     engine.send(Cmd::PlayItem(first));
     let t0 = Instant::now();

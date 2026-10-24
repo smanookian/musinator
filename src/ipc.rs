@@ -108,7 +108,7 @@ pub fn status_view(v: &EngineView) -> Value {
             "output_rate": out_rate, "resampled": resampled,
             "bit_perfect": !resampled && out_rate != 0 && s.volume >= 1.0 && s.gain_db.is_none(),
         });
-        j["gain_db"] = json!(s.gain_db.map(|g| (g * 10.0).round() / 10.0));
+        j["gain_db"] = json!(s.gain_db.map(|g| (g as f64 * 10.0).round() / 10.0));
     }
     j
 }
@@ -125,7 +125,11 @@ pub fn status_text(v: &Value) -> String {
     let pos = fmt_time((v["position"].as_f64().unwrap_or(0.0) * 1000.0) as u64);
     let dur = v["duration"].as_f64().map(|d| fmt_time((d * 1000.0) as u64)).unwrap_or_else(|| "--:--".into());
     let f = &v["format"];
-    let mut fmt = format!("{} {}", f["codec"].as_str().unwrap_or(""), khz(f["sample_rate"].as_u64().unwrap_or(0) as u32));
+    let rate = khz(f["sample_rate"].as_u64().unwrap_or(0) as u32);
+    let mut fmt = match f["bits"].as_u64() {
+        Some(b) => format!("{} {b}/{rate}", f["codec"].as_str().unwrap_or("")),
+        None => format!("{} {rate}", f["codec"].as_str().unwrap_or("")),
+    };
     if f["resampled"].as_bool() == Some(true) {
         fmt.push_str(&format!(" → {} kHz", khz(f["output_rate"].as_u64().unwrap_or(0) as u32)));
     }
@@ -146,9 +150,13 @@ pub fn bar_line() -> String {
     let artist = v["artist"].as_str().unwrap_or("");
     let pos = fmt_time((v["position"].as_f64().unwrap_or(0.0) * 1000.0) as u64);
     let icon = if state == "playing" { "♪" } else { "⏸" };
-    let short = |s: &str, n: usize| if s.chars().count() > n { format!("{}…", s.chars().take(n - 1).collect::<String>()) } else { s.to_string() };
-    let text = if artist.is_empty() { format!("{icon} {}  {pos}", short(title, 40)) } else { format!("{icon} {} · {}  {pos}", short(title, 32), short(artist, 24)) };
+    let short =
+        |s: &str, n: usize| if s.chars().count() > n { format!("{}…", s.chars().take(n - 1).collect::<String>()) } else { s.to_string() };
+    let text = if artist.is_empty() {
+        format!("{icon} {}  {pos}", short(title, 40))
+    } else {
+        format!("{icon} {} · {}  {pos}", short(title, 32), short(artist, 24))
+    };
     let tooltip = format!("{}\n{} — {}\n{}", title, artist, v["album"].as_str().unwrap_or(""), status_text(&v));
     json!({ "text": text, "tooltip": tooltip, "class": state, "alt": state }).to_string()
 }
-

@@ -25,7 +25,7 @@ use crate::config::Config;
 use crate::engine::{Cmd, Engine, Event as EngineEvent, PlayState};
 use crate::ipc::{self, Request};
 use crate::keys::{Action, Keymap};
-use crate::library::{Library, LibEvent, db, lrc};
+use crate::library::{LibEvent, Library, db, lrc};
 use crate::model::{ArtRef, Track, TrackRef};
 use crate::source::local::LocalSource;
 use crate::source::{Item, Lyrics, NodeKind, SearchHits, Sources};
@@ -244,7 +244,9 @@ impl App {
         }
         s.push(Side::Blank);
         s.push(Side::Header("Smart"));
-        for (l, n) in [("Most played", "smart:most"), ("Never played", "smart:never"), ("Added this week", "smart:week"), ("Liked", "smart:liked")] {
+        for (l, n) in
+            [("Most played", "smart:most"), ("Never played", "smart:never"), ("Added this week", "smart:week"), ("Liked", "smart:liked")]
+        {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         self.side = s;

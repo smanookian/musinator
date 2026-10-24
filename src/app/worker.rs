@@ -38,10 +38,22 @@ pub enum Job {
 }
 
 pub enum Msg {
-    Children { seq: u64, items: Result<Vec<Item>, String> },
-    Search { seq: u64, hits: SearchHits },
-    Lyrics { track: TrackRef, lyrics: Option<Lyrics> },
-    Tracks { tracks: Vec<Arc<Track>>, then: Then },
+    Children {
+        seq: u64,
+        items: Result<Vec<Item>, String>,
+    },
+    Search {
+        seq: u64,
+        hits: SearchHits,
+    },
+    Lyrics {
+        track: TrackRef,
+        lyrics: Option<Lyrics>,
+    },
+    Tracks {
+        tracks: Vec<Arc<Track>>,
+        then: Then,
+    },
     Playlists(Vec<db::Playlist>),
     Liked(bool),
     Info(String),

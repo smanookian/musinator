@@ -120,7 +120,12 @@ impl Library {
                 let p = e.path();
                 if tags::is_audio(p) {
                     if let Ok(m) = e.metadata() {
-                        let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0);
+                        let mtime = m
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
                         files.push((p.to_path_buf(), mtime, m.len() as i64));
                     }
                 } else if is_cover(p) {
@@ -138,10 +143,8 @@ impl Library {
             st.query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))?.filter_map(|r| r.ok()).collect()
         };
         let seen: HashSet<String> = files.iter().map(|f| f.0.to_string_lossy().into_owned()).collect();
-        let todo: Vec<&(PathBuf, i64, i64)> = files
-            .iter()
-            .filter(|(p, m, s)| known.get(p.to_string_lossy().as_ref()) != Some(&(*m, *s)))
-            .collect();
+        let todo: Vec<&(PathBuf, i64, i64)> =
+            files.iter().filter(|(p, m, s)| known.get(p.to_string_lossy().as_ref()) != Some(&(*m, *s))).collect();
         let total = todo.len();
         let mut added = 0;
         let _ = self.tx.send(LibEvent::Progress { done: 0, total });
@@ -155,7 +158,11 @@ impl Library {
                 match r {
                     Ok(row) => {
                         let dir = p.parent().unwrap_or(Path::new(""));
-                        let art = if row.embedded_art { Some("embedded".to_string()) } else { covers.get(dir).map(|c| c.to_string_lossy().into_owned()) };
+                        let art = if row.embedded_art {
+                            Some("embedded".to_string())
+                        } else {
+                            covers.get(dir).map(|c| c.to_string_lossy().into_owned())
+                        };
                         let lyrics = if p.with_extension("lrc").exists() {
                             1
                         } else if row.embedded_lyrics {
@@ -218,7 +225,8 @@ impl Library {
             if self.again.load(Acquire) || !self.measure_loudness.load(Relaxed) {
                 return Ok(());
             }
-            let res: Vec<_> = pool.install(|| chunk.par_iter().map(|(id, path, key)| (*id, key.clone(), measure_file(Path::new(path)))).collect());
+            let res: Vec<_> =
+                pool.install(|| chunk.par_iter().map(|(id, path, key)| (*id, key.clone(), measure_file(Path::new(path)))).collect());
             let mut albums = HashSet::new();
             conn.execute_batch("BEGIN")?;
             for (id, key, r) in res {
@@ -317,7 +325,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("t.flac");
         let st = std::process::Command::new("ffmpeg")
-            .args(["-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000:duration=5", "-af", "volume=0.8", "-ac", "2", "-c:a", "flac"])
+            .args([
+                "-y",
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=1000:sample_rate=48000:duration=5",
+                "-af",
+                "volume=0.8",
+                "-ac",
+                "2",
+                "-c:a",
+                "flac",
+            ])
             .arg(&p)
             .status()
             .unwrap();

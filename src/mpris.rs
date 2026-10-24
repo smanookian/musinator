@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use crossbeam_channel as cb;
 use mpris_server::zbus::{Result as ZResult, fdo};
-use mpris_server::{LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, Property, RootInterface, Server, Signal, Time, TrackId, Volume};
+use mpris_server::{
+    LoopStatus, Metadata, PlaybackRate, PlaybackStatus, PlayerInterface, Property, RootInterface, Server, Signal, Time, TrackId, Volume,
+};
 use parking_lot::Mutex;
 
 use crate::engine::{Engine, PlayState};

@@ -149,7 +149,8 @@ pub fn track_from_row(src: &SourceId, r: &Row) -> rusqlite::Result<Track> {
     let path: String = r.get(1)?;
     let art: Option<String> = r.get(22)?;
     let origin: i64 = r.get(21)?;
-    let art = art.map(|a| ArtRef { source: src.clone(), id: if a == "embedded" { format!("embedded:{path}") } else { format!("file:{a}") } });
+    let art =
+        art.map(|a| ArtRef { source: src.clone(), id: if a == "embedded" { format!("embedded:{path}") } else { format!("file:{a}") } });
     Ok(Track {
         title: r.get(2)?,
         artist: r.get(3)?,
@@ -280,7 +281,8 @@ pub fn move_in_playlist(c: &mut Connection, id: i64, a: i64, b: i64) -> Result<(
 
 /// Playlist items, resolved to library tracks where possible.
 pub fn playlist_tracks(c: &Connection, src: &SourceId, id: i64) -> Result<Vec<Arc<Track>>> {
-    let mut st = c.prepare_cached("SELECT source, track_id, title, artist, duration_ms FROM playlist_items WHERE playlist_id=?1 ORDER BY pos")?;
+    let mut st =
+        c.prepare_cached("SELECT source, track_id, title, artist, duration_ms FROM playlist_items WHERE playlist_id=?1 ORDER BY pos")?;
     let items: Vec<(String, String, String, String, Option<i64>)> =
         st.query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?.filter_map(|r| r.ok()).collect();
     let mut out = Vec::with_capacity(items.len());

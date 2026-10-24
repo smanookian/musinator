@@ -23,7 +23,9 @@ pub fn set(on: bool) -> Result<()> {
         std::fs::create_dir_all(p.parent().unwrap())?;
         std::fs::write(
             &p,
-            format!("# Written by Musinator (Settings → Audio → PipeWire rate switching).\ncontext.properties = {{\n    default.clock.allowed-rates = {RATES}\n}}\n"),
+            format!(
+                "# Written by Musinator (Settings → Audio → PipeWire rate switching).\ncontext.properties = {{\n    default.clock.allowed-rates = {RATES}\n}}\n"
+            ),
         )?;
     } else if p.exists() {
         std::fs::remove_file(&p)?;
@@ -37,7 +39,9 @@ pub fn set(on: bool) -> Result<()> {
 fn default_rates() -> String {
     let dirs = [crate::config::home().join(".config/pipewire"), PathBuf::from("/etc/pipewire"), PathBuf::from("/usr/share/pipewire")];
     for d in dirs {
-        for f in std::iter::once(d.join("pipewire.conf")).chain(std::fs::read_dir(d.join("pipewire.conf.d")).into_iter().flatten().flatten().map(|e| e.path())) {
+        for f in std::iter::once(d.join("pipewire.conf"))
+            .chain(std::fs::read_dir(d.join("pipewire.conf.d")).into_iter().flatten().flatten().map(|e| e.path()))
+        {
             if f.file_name().is_some_and(|n| n == "50-musinator.conf") {
                 continue;
             }
