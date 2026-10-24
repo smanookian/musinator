@@ -10,8 +10,9 @@ use crossbeam_channel as cb;
 use image::DynamicImage;
 use ratatui::layout::Size;
 use ratatui_image::Resize;
-use ratatui_image::picker::Picker;
+use ratatui_image::picker::{Capability, Picker, ProtocolType};
 use ratatui_image::protocol::Protocol;
+use ratatui_image::protocol::kitty::Kitty;
 
 use crate::model::ArtRef;
 use crate::source::Sources;
@@ -87,7 +88,8 @@ impl ArtWorker {
                             }
                         };
                         let file = img.as_ref().and_then(|i| save_jpeg(&r.art, i));
-                        let proto = img.as_ref().and_then(|i| encode(&picker, i, r.cells));
+                        let id = image_id(r.slot, &r.art);
+                        let proto = img.as_ref().and_then(|i| encode(&picker, i, r.cells, id));
                         let _ = out.send(ArtReady { art: r.art, cells: r.cells, slot: r.slot, proto, file });
                     }
                 }
@@ -120,7 +122,7 @@ fn save_jpeg(a: &ArtRef, img: &DynamicImage) -> Option<PathBuf> {
 }
 
 /// Resize to the exact pixel size of the cell area (keeping the square-ish cover centred) and encode.
-fn encode(picker: &Picker, img: &DynamicImage, cells: Size) -> Option<Protocol> {
+fn encode(picker: &Picker, img: &DynamicImage, cells: Size, id: u32) -> Option<Protocol> {
     if cells.width == 0 || cells.height == 0 {
         return None;
     }
@@ -128,5 +130,36 @@ fn encode(picker: &Picker, img: &DynamicImage, cells: Size) -> Option<Protocol> 
     let (pw, ph) = (cells.width as u32 * fs.width as u32, cells.height as u32 * fs.height as u32);
     let side = pw.min(ph);
     let resized = img.resize_to_fill(side, side, image::imageops::FilterType::Triangle);
-    picker.new_protocol(resized, cells, Resize::Fit(None)).ok()
+    protocol(picker, resized, id)
+}
+
+/// Kitty image ids. Re-sending an image with the same id replaces the old one in the
+/// terminal, so pictures do not pile up in its memory over a long session.
+pub const ID_PANEL: u32 = 0x4d_0001;
+pub const ID_BIG: u32 = 0x4d_0002;
+pub const ID_LYRIC: u32 = 0x4d_0003;
+
+fn image_id(slot: Slot, art: &ArtRef) -> u32 {
+    match slot {
+        Slot::Panel => ID_PANEL,
+        Slot::Big => ID_BIG,
+        // One id per album (bounded): the same cover reuses its slot.
+        Slot::Grid => {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            art.hash(&mut h);
+            0x4d_1000 + (h.finish() % 4096) as u32
+        }
+    }
+}
+
+/// Encode an image that is already sized to whole cells. Kitty gets a fixed id.
+pub fn protocol(picker: &Picker, img: DynamicImage, id: u32) -> Option<Protocol> {
+    let fs = picker.font_size();
+    let cells = Size::new(img.width().div_ceil(fs.width as u32) as u16, img.height().div_ceil(fs.height as u32) as u16);
+    if picker.protocol_type() == ProtocolType::Kitty {
+        let compress = picker.capabilities().contains(&Capability::KittyCompression);
+        Kitty::new(img, cells, id, picker.tmux_detected(), compress).ok().map(Protocol::Kitty)
+    } else {
+        picker.new_protocol(img, cells, Resize::Fit(None)).ok()
+    }
 }

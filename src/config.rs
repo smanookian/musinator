@@ -17,6 +17,7 @@ pub struct Config {
     pub corners: String,
     pub shadow: bool,
     pub term_colors: bool,
+    pub big_lyrics: bool,
     pub resume: bool,
     pub images: String,
     pub album_grid: bool,
@@ -51,6 +52,7 @@ impl Default for Config {
             corners: "round".into(),
             shadow: true,
             term_colors: true,
+            big_lyrics: true,
             resume: true,
             images: "auto".into(),
             album_grid: false,
@@ -197,6 +199,13 @@ pub const SETTINGS: &[Setting] = &[
         "Frames per second. Lower uses less CPU.",
         Kind::Number { min: 10.0, max: 60.0, step: 5.0, unit: "fps" }
     ),
+    s!(
+        "big_lyrics",
+        "Appearance",
+        "Big current lyric line",
+        "In full-screen lyrics (f), draw the current line in big text. Kitty and Ghostty only.",
+        Kind::Toggle
+    ),
     s!("lyrics", "Appearance", "Lyrics", "Show synced lyrics on Now Playing when a song has them.", Kind::Toggle),
     s!("confirm_quit", "Playback", "Confirm before quitting", "Ask before Musinator closes.", Kind::Toggle),
     s!(
@@ -285,6 +294,7 @@ impl Config {
             }
             "shadow" => on(self.shadow),
             "term_colors" => on(self.term_colors),
+            "big_lyrics" => on(self.big_lyrics),
             "resume" => on(self.resume),
             "album_grid" => on(self.album_grid),
             "visualizer" => on(self.visualizer),
@@ -322,6 +332,7 @@ impl Config {
         Some(match key {
             "shadow" => &mut self.shadow,
             "term_colors" => &mut self.term_colors,
+            "big_lyrics" => &mut self.big_lyrics,
             "resume" => &mut self.resume,
             "album_grid" => &mut self.album_grid,
             "visualizer" => &mut self.visualizer,

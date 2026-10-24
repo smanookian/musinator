@@ -944,22 +944,53 @@ fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
     let snap = app.now();
     match app.current_lyric() {
         Some((l, cur)) if !l.synced.is_empty() => {
-            // Two rows per line; the current line sits in the middle.
+            let lines: Vec<String> = l.synced.iter().map(|(_, s)| s.clone()).collect();
             let cur_i = cur.map(|c| c as i64).unwrap_or(-1);
-            for (k, (_, line)) in l.synced.iter().enumerate() {
-                let y = mid as i64 + (k as i64 - cur_i) * 2;
+            // Big current line (Kitty/Ghostty): a picture in a 7-row band in the middle.
+            let band = Rect { x: body.x + 2, y: mid.saturating_sub(3), width: body.width.saturating_sub(4), height: 7.min(body.height) };
+            let key = |i: i64| {
+                lines.get(i.max(0) as usize).filter(|_| i >= 0).map(|text| super::biglyric::Key {
+                    text: text.clone(),
+                    color: t.accent,
+                    cells: Size::new(band.width, band.height),
+                })
+            };
+            let cur_key = key(cur_i);
+            let big = cur_key.as_ref().map(|k| app.big_pic(k).map(|p| p.cloned()));
+            let big_mode = app.big_enabled() && big.is_some();
+            if let Some(next) = key(cur_i + 1) {
+                app.big_prefetch(next);
+            }
+            let buf = f.buffer_mut();
+            for (k, line) in lines.iter().enumerate() {
+                let d = k as i64 - cur_i;
+                let gap = if big_mode && d != 0 { 3 * d.signum() } else { 0 };
+                let y = mid as i64 + d * 2 + gap;
                 if y < body.y as i64 || y >= (body.y + body.height) as i64 {
                     continue;
                 }
-                let st = if k as i64 == cur_i {
+                if d == 0 && matches!(big, Some(Some(Some(_)))) {
+                    continue;
+                }
+                let st = if d == 0 {
                     Style::default().fg(c(t.accent)).add_modifier(Modifier::BOLD)
-                } else if k as i64 == cur_i + 1 {
+                } else if d == 1 {
                     Style::default().fg(c(t.fg))
                 } else {
                     muted
                 };
                 let text = if line.trim().is_empty() { "♪" } else { line.as_str() };
                 put_center(buf, body, y as u16, text, st);
+            }
+            if let Some(Some(Some(proto))) = big {
+                let s = proto.size();
+                let r = Rect {
+                    x: band.x + band.width.saturating_sub(s.width) / 2,
+                    y: band.y,
+                    width: s.width.min(band.width),
+                    height: s.height.min(band.height),
+                };
+                f.render_widget(Image::new(&proto), r);
             }
         }
         Some((l, _)) => {
@@ -982,6 +1013,7 @@ fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
         }
     }
     // Bottom: title · artist, progress, close hint.
+    let buf = f.buffer_mut();
     let y = area.y + area.height - 1;
     if let Some(tr) = snap.track.as_ref() {
         let left = format!("{} · {}", tr.display_title(), tr.display_artist());

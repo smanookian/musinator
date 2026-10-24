@@ -5,6 +5,7 @@
 //! (progress while playing, visualizer frames while visible), so idle CPU is ~0.
 
 pub mod art;
+pub mod biglyric;
 pub mod dialogs;
 pub mod draw;
 pub mod session;
@@ -135,6 +136,10 @@ pub struct App {
     pub lyrics_lookup: Option<Instant>,
     /// Full-screen lyrics view is open.
     pub lyrics_full: bool,
+    big: Option<biglyric::BigLyrics>,
+    /// Big lyric pictures asked for / ready (small, newest last).
+    pub big_pics: Vec<(biglyric::Key, Option<Protocol>)>,
+    big_asked: Vec<biglyric::Key>,
     /// Ratings changed this session (lists may still hold old track copies).
     pub ratings: std::collections::HashMap<TrackRef, Option<u8>>,
     /// (bg, fg) last sent to the terminal with OSC 11/10.
@@ -1310,6 +1315,8 @@ pub fn run(cfg: Config) -> Result<()> {
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
+    let (big_tx, big_rx) = cb::unbounded();
+    let big = kitty_ok.then(|| biglyric::BigLyrics::start(picker.clone(), big_tx));
     let (theme_tx, theme_rx) = cb::unbounded::<()>();
     let _theme_watch = watch_omarchy(theme_tx);
     let mpris = if cfg.mpris { crate::mpris::Mpris::start(engine_handle(&engine)).ok() } else { None };
@@ -1359,6 +1366,9 @@ pub fn run(cfg: Config) -> Result<()> {
         sleep: None,
         lyrics_lookup: None,
         lyrics_full: false,
+        big,
+        big_pics: Vec::new(),
+        big_asked: Vec::new(),
         ratings: Default::default(),
         term_colors: None,
         kitty_ok,
@@ -1404,6 +1414,15 @@ pub fn run(cfg: Config) -> Result<()> {
                 recv(lib_rx) -> e => app.on_lib(e?),
                 recv(w_rx) -> m => app.on_worker(m?),
                 recv(a_rx) -> a => app.on_art(a?),
+                recv(big_rx) -> b => {
+                    let b = b?;
+                    app.big_pics.retain(|(k, _)| *k != b.key);
+                    app.big_pics.push((b.key, b.proto));
+                    if app.big_pics.len() > 6 {
+                        app.big_pics.remove(0);
+                    }
+                    app.dirty = true;
+                },
                 recv(theme_rx) -> _ => { while theme_rx.try_recv().is_ok() {} app.reload_omarchy() },
                 recv(ipc_rx) -> r => app.on_ipc(r?),
                 recv(mpris_rx) -> c => { if let Ok(c) = c { app.on_mpris(c) } },
@@ -1595,5 +1614,34 @@ impl App {
         const SPIN: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
         let t = self.lyrics_lookup?;
         Some(format!("{} Looking up lyrics", SPIN[(t.elapsed().as_millis() / 100) as usize % SPIN.len()]))
+    }
+}
+
+impl App {
+    /// Big lyric line picture for `key` if ready; asks for it otherwise.
+    /// `Some(None)` means it can't be drawn big (use normal text).
+    pub fn big_pic(&mut self, key: &biglyric::Key) -> Option<Option<&Protocol>> {
+        let on = self.big_enabled();
+        let big = self.big.as_ref().filter(|_| on)?;
+        if let Some(i) = self.big_pics.iter().position(|(k, _)| k == key) {
+            return Some(self.big_pics[i].1.as_ref());
+        }
+        if !self.big_asked.contains(key) {
+            big.request(key.clone());
+            self.big_asked.push(key.clone());
+            if self.big_asked.len() > 16 {
+                self.big_asked.remove(0);
+            }
+        }
+        None
+    }
+
+    pub fn big_enabled(&self) -> bool {
+        self.big.is_some() && self.cfg.big_lyrics && self.images_on && self.picker.protocol_type() == ProtocolType::Kitty
+    }
+
+    /// Prepare a line ahead of time (the next lyric line).
+    pub fn big_prefetch(&mut self, key: biglyric::Key) {
+        let _ = self.big_pic(&key);
     }
 }
