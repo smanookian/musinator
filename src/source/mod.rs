@@ -88,6 +88,8 @@ pub struct SearchHits {
 #[derive(Clone, Debug, Default)]
 pub struct Lyrics {
     pub synced: Vec<(u64, String)>,
+    /// Word times per synced line (empty when the line has none).
+    pub words: Vec<Vec<(u64, String)>>,
     pub plain: Option<String>,
 }
 

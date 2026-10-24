@@ -21,6 +21,8 @@ pub struct Key {
     pub color: Rgb,
     /// Area for the picture, in cells.
     pub cells: Size,
+    /// Karaoke: (chars already sung, color of the rest). Sung chars use `color`.
+    pub sung: Option<(usize, Rgb)>,
 }
 
 pub struct Ready {
@@ -50,7 +52,7 @@ impl BigLyrics {
                         }
                         let proto = font.as_ref().and_then(|f| draw(f, &picker, &key)).and_then(|img| protocol(&picker, img, ID_LYRIC));
                         done.push_back(key.clone());
-                        if done.len() > 8 {
+                        if done.len() > 80 {
                             done.pop_front();
                         }
                         let _ = out.send(Ready { key, proto });
@@ -123,12 +125,22 @@ fn draw(font: &FontVec, picker: &Picker, key: &Key) -> Option<DynamicImage> {
     let line_h = scaled.height() + scaled.line_gap();
     let total = line_h * lines.len() as f32;
     let top = (h as f32 - total) / 2.0;
-    let Rgb(r, g, b) = key.color;
+    // Count chars across lines (the space at each line break counts as one).
+    let mut ci = 0usize;
     for (i, line) in lines.iter().enumerate() {
+        if i > 0 {
+            ci += 1;
+        }
         let lw: f32 = line.chars().map(|c| scaled.h_advance(scaled.glyph_id(c))).sum();
         let mut x = (w as f32 - lw) / 2.0;
         let y = top + i as f32 * line_h + scaled.ascent();
         for c in line.chars() {
+            let col = match key.sung {
+                Some((n, rest)) if ci >= n => rest,
+                _ => key.color,
+            };
+            ci += 1;
+            let Rgb(r, g, b) = col;
             let gid = scaled.glyph_id(c);
             let glyph = gid.with_scale_and_position(scaled.scale(), point(x, y));
             x += scaled.h_advance(gid);
@@ -161,7 +173,12 @@ mod tests {
             return;
         };
         let picker = Picker::halfblocks();
-        let key = Key { text: "You got the lips to make a strong man weak".into(), color: Rgb(232, 82, 55), cells: Size::new(90, 7) };
+        let key = Key {
+            text: "You got the lips to make a strong man weak".into(),
+            color: Rgb(232, 82, 55),
+            cells: Size::new(90, 7),
+            sung: Some((8, Rgb(200, 200, 200))),
+        };
         let t = std::time::Instant::now();
         let img = draw(&font, &picker, &key).expect("drawn");
         let ms = t.elapsed().as_secs_f64() * 1000.0;

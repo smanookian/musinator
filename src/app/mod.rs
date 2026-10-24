@@ -1423,7 +1423,7 @@ pub fn run(cfg: Config) -> Result<()> {
                     let b = b?;
                     app.big_pics.retain(|(k, _)| *k != b.key);
                     app.big_pics.push((b.key, b.proto));
-                    if app.big_pics.len() > 6 {
+                    if app.big_pics.len() > 40 {
                         app.big_pics.remove(0);
                     }
                     app.dirty = true;
@@ -1634,7 +1634,7 @@ impl App {
         if !self.big_asked.contains(key) {
             big.request(key.clone());
             self.big_asked.push(key.clone());
-            if self.big_asked.len() > 16 {
+            if self.big_asked.len() > 80 {
                 self.big_asked.remove(0);
             }
         }
@@ -1665,8 +1665,32 @@ impl App {
             return None;
         }
         let (l, cur) = self.current_lyric()?;
-        let next = l.synced.get(cur.map(|c| c + 1).unwrap_or(0))?.0;
         let now = self.lyric_clock();
-        Some(Duration::from_millis(next.saturating_sub(now)).max(Duration::from_millis(5)))
+        let mut wait = l.synced.get(cur.map(|c| c + 1).unwrap_or(0)).map(|n| n.0.saturating_sub(now));
+        // Next word in the current line (karaoke).
+        if let Some(words) = cur.and_then(|c| l.words.get(c)) {
+            let wc = self.word_clock();
+            if let Some(w) = words.iter().find(|w| w.0 > wc) {
+                let d = w.0 - wc;
+                wait = Some(wait.map_or(d, |x| x.min(d)));
+            }
+        }
+        Some(Duration::from_millis(wait?).max(Duration::from_millis(5)))
+    }
+}
+
+impl App {
+    /// Song time for word highlighting: what you hear minus your offset (no lead:
+    /// karaoke fills a word when it is sung).
+    pub fn word_clock(&self) -> u64 {
+        (self.engine.position().as_millis() as i64 - self.lyrics_offset).max(0) as u64
+    }
+
+    /// Word-by-word state of the current line: (word texts, how many are sung).
+    pub fn current_words(&self) -> Option<(Vec<String>, usize)> {
+        let (l, cur) = self.current_lyric()?;
+        let i = cur?;
+        let sung = lrc::words_sung(l, i, self.word_clock())?;
+        Some((l.words[i].iter().map(|w| w.1.clone()).collect(), sung))
     }
 }

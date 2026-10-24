@@ -767,6 +767,14 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
                 let start = cur_i.saturating_sub(before);
                 for (k, (_, line)) in l.synced.iter().enumerate().skip(start).take(avail) {
                     let yy = y + (k - start) as u16;
+                    if Some(k) == cur
+                        && let Some((words, sung)) = app.current_words()
+                    {
+                        let bold = Style::default().add_modifier(Modifier::BOLD);
+                        put(buf, x, yy, "♪ ", 2, bold.fg(c(t.accent)));
+                        put_words(buf, x + 2, yy, &words, sung, w.saturating_sub(2), bold.fg(c(t.accent)), bold.fg(c(t.fg)));
+                        continue;
+                    }
                     let (txt, st) = if Some(k) == cur {
                         (format!("♪ {line}"), Style::default().fg(c(t.accent)).add_modifier(Modifier::BOLD))
                     } else if Some(k) == cur.map(|c| c + 1) || (cur.is_none() && k == 0) {
@@ -953,9 +961,26 @@ fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
                     text: text.clone(),
                     color: t.accent,
                     cells: Size::new(band.width, band.height),
+                    sung: None,
                 })
             };
-            let cur_key = key(cur_i);
+            let cur_words = app.current_words();
+            let sung_chars = |words: &[String], n: usize| words.iter().take(n).map(|w| w.chars().count() + 1).sum::<usize>();
+            let cur_key = key(cur_i).map(|mut k| {
+                if let Some((words, sung)) = &cur_words {
+                    k.text = words.join(" ");
+                    k.sung = Some((sung_chars(words, *sung), t.fg));
+                }
+                k
+            });
+            // Karaoke: get every word state of this line ready ahead.
+            if let (Some(k0), Some((words, _))) = (&cur_key, &cur_words) {
+                for n in 0..=words.len() {
+                    let mut k = k0.clone();
+                    k.sung = Some((sung_chars(words, n), t.fg));
+                    app.big_prefetch(k);
+                }
+            }
             let big = cur_key.as_ref().map(|k| app.big_pic(k).map(|p| p.cloned()));
             let big_mode = app.big_enabled() && big.is_some();
             if let Some(next) = key(cur_i + 1) {
@@ -979,6 +1004,15 @@ fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
                 } else {
                     muted
                 };
+                if d == 0
+                    && let Some((words, sung)) = &cur_words
+                {
+                    let ww = words_width(words).min(body.width.saturating_sub(4));
+                    let x = body.x + body.width.saturating_sub(ww) / 2;
+                    let bold = Style::default().add_modifier(Modifier::BOLD);
+                    put_words(buf, x, y as u16, words, *sung, ww, bold.fg(c(t.accent)), bold.fg(c(t.fg)));
+                    continue;
+                }
                 let text = if line.trim().is_empty() { "♪" } else { line.as_str() };
                 put_center(buf, body, y as u16, text, st);
             }
@@ -1026,4 +1060,23 @@ fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
         let pw = area.width.saturating_sub(lw + hw + 4);
         progress(buf, app, Rect { x: px, y, width: pw, height: 1 });
     }
+}
+
+/// Draw words left to right: the first `sung` in `sung_st`, the rest in `rest_st`.
+#[allow(clippy::too_many_arguments)]
+fn put_words(buf: &mut Buffer, x: u16, y: u16, words: &[String], sung: usize, max_w: u16, sung_st: Style, rest_st: Style) {
+    let mut cx = x;
+    let end = x + max_w;
+    for (i, w) in words.iter().enumerate() {
+        if cx >= end {
+            break;
+        }
+        let st = if i < sung { sung_st } else { rest_st };
+        let text = if i + 1 < words.len() { format!("{w} ") } else { w.clone() };
+        cx = put(buf, cx, y, &text, end - cx, st);
+    }
+}
+
+fn words_width(words: &[String]) -> u16 {
+    (words.iter().map(|w| w.width()).sum::<usize>() + words.len().saturating_sub(1)) as u16
 }
