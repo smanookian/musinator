@@ -58,11 +58,7 @@ fn ids_unique_and_kebab_case() {
     let mut seen = HashSet::new();
     for t in &themes {
         assert!(seen.insert(t.id.clone()), "duplicate id {}", t.id);
-        assert!(
-            t.id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'),
-            "not kebab-case: {}",
-            t.id
-        );
+        assert!(t.id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'), "not kebab-case: {}", t.id);
         assert!(!t.label.is_empty());
         assert_ne!(t.id, omarchy::ID);
     }
@@ -125,10 +121,7 @@ fn print_worst_pairs() {
     themes.extend(omarchy::current());
     println!("{:<24} {:<28} {:>6}", "theme", "worst pair", "ratio");
     for t in &themes {
-        let (pair, ratio, min) = contrast_report(t)
-            .into_iter()
-            .min_by(|a, b| (a.1 / a.2).total_cmp(&(b.1 / b.2)))
-            .unwrap();
+        let (pair, ratio, min) = contrast_report(t).into_iter().min_by(|a, b| (a.1 / a.2).total_cmp(&(b.1 / b.2))).unwrap();
         let id = if t.id == omarchy::ID { format!("{} [{}]", t.id, t.label) } else { t.id.clone() };
         println!("{id:<24} {pair:<28} {ratio:>6.2} (needs {min})");
     }
