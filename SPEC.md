@@ -102,7 +102,16 @@ Quit: `ctrl+c` or `Q` (with no confirm while music plays? decide).
 - One binary. AUR package (`musinator-bin`) + install script.
 
 ## 9. Not in v1
-Servers, radio, Spotify (v2/v3). EQ and mini mode (v1.1). Last.fm scrobbling. Podcasts. Tag editing. Cloud sync.
+Servers, radio, Spotify (v2/v3). EQ, mini mode and tag editing (v1.1, see below). Last.fm scrobbling. Podcasts. Cloud sync.
+
+### v1.1 plan (decided 2026-10-24, build in this order)
+1. Full-screen lyrics view.
+2. Word-by-word karaoke (enhanced LRC with word times).
+3. Mini mode (3 lines).
+4. Tag editing, easy to hard: fill tags from the file name; edit one song (title, artist, album, album artist, year, track, disc, genre); edit a whole album; change/add cover art; look up tags online (MusicBrainz). Saves safely (write a copy, then replace).
+5. 10-band EQ with a visible curve, presets + custom.
+
+Already added after v1: terminal color sync, sleep timer, lyrics offset, resume on start, star ratings, online lyrics on a key (LRCLIB, cached; optional `.lrc` next to songs).
 
 ## 10. Done when (v1)
 1. Install from AUR or one script on Omarchy; `musinator` opens Library.
