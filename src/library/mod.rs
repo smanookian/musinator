@@ -5,6 +5,7 @@ pub mod db;
 pub mod lrc;
 pub mod lrclib;
 pub mod m3u8;
+pub mod tagedit;
 pub mod tags;
 
 use std::collections::{HashMap, HashSet};
@@ -20,9 +21,21 @@ use rayon::prelude::*;
 
 #[derive(Clone, Debug)]
 pub enum LibEvent {
-    Progress { done: usize, total: usize },
-    Done { added: usize, removed: usize, total: usize },
-    Loudness { done: usize, total: usize },
+    Progress {
+        done: usize,
+        total: usize,
+    },
+    /// `updated`: known files whose tags were read again.
+    Done {
+        added: usize,
+        updated: usize,
+        removed: usize,
+        total: usize,
+    },
+    Loudness {
+        done: usize,
+        total: usize,
+    },
     Error(String),
 }
 
@@ -209,7 +222,7 @@ impl Library {
             db::rebuild_albums(&conn)?;
         }
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?;
-        let _ = self.tx.send(LibEvent::Done { added, removed: gone.len(), total: count as usize });
+        let _ = self.tx.send(LibEvent::Done { added, updated: total.saturating_sub(added), removed: gone.len(), total: count as usize });
         Ok(())
     }
 

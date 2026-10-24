@@ -19,6 +19,7 @@ use crate::config::{Kind, SECTIONS, SETTINGS};
 use crate::engine::Cmd;
 use crate::keys::{ACTIONS, Chord, Keymap, chord_id};
 use crate::library::db::Playlist;
+use crate::library::tagedit::{self, Fields};
 use crate::model::{Track, fmt_time};
 use crate::source::{Item, Node, NodeKind};
 
@@ -58,10 +59,57 @@ pub enum Dialog {
     Folders { cursor: usize, changed: bool },
     Sleep { cursor: usize },
     Input { title: &'static str, label: &'static str, value: String, what: InputFor },
+    Tags(Box<TagEdit>),
     PlaylistPick { nodes: Vec<String>, tracks: Vec<Arc<Track>>, entries: Vec<(Option<i64>, String)>, cursor: usize },
 }
 
+/// The tag editor: one song, or many (then only shared fields are shown).
+pub struct TagEdit {
+    paths: Vec<std::path::PathBuf>,
+    orig: Fields,
+    /// The songs differ in this field.
+    mixed: [bool; 8],
+    values: Fields,
+    touched: [bool; 8],
+    row: usize,
+    note: Option<String>,
+}
+
+impl TagEdit {
+    fn rows(&self) -> Vec<usize> {
+        if self.paths.len() == 1 { (0..8).collect() } else { tagedit::ALBUM_FIELDS.to_vec() }
+    }
+    /// What to write: only fields the user changed.
+    fn changes(&self) -> [Option<String>; 8] {
+        let mut out: [Option<String>; 8] = Default::default();
+        for i in self.rows() {
+            if self.touched[i] && (self.mixed[i] || self.values[i].trim() != self.orig[i]) {
+                out[i] = Some(self.values[i].trim().to_string());
+            }
+        }
+        out
+    }
+}
+
 impl Dialog {
+    pub fn tags(paths: Vec<std::path::PathBuf>, all: Vec<Fields>) -> Self {
+        let mut orig: Fields = all[0].clone();
+        let mut mixed = [false; 8];
+        for f in &all[1..] {
+            for i in 0..8 {
+                if f[i] != orig[i] {
+                    mixed[i] = true;
+                }
+            }
+        }
+        for i in 0..8 {
+            if mixed[i] {
+                orig[i].clear();
+            }
+        }
+        let e = TagEdit { paths, values: orig.clone(), orig, mixed, touched: [false; 8], row: 0, note: None };
+        Dialog::Tags(Box::new(e))
+    }
     pub fn quit() -> Self {
         Dialog::Quit
     }
@@ -372,6 +420,47 @@ impl Dialog {
                 }
                 true
             }
+            Dialog::Tags(e) => {
+                let rows = e.rows();
+                if esc {
+                    return false;
+                }
+                if down {
+                    e.row = (e.row + 1) % rows.len();
+                } else if up {
+                    e.row = (e.row + rows.len() - 1) % rows.len();
+                } else if k.code == KeyCode::Enter {
+                    let fields = e.changes();
+                    if fields.iter().all(Option::is_none) {
+                        app.info("Nothing changed");
+                    } else {
+                        app.send_job(Job::WriteTags { paths: std::mem::take(&mut e.paths), fields });
+                    }
+                    return false;
+                } else if ctrl && k.code == KeyCode::Char('f') {
+                    let guess = tagedit::from_filename(&e.paths[0]);
+                    let mut n = 0;
+                    for &i in &rows {
+                        if !guess[i].is_empty() && guess[i] != e.values[i] {
+                            e.values[i] = guess[i].clone();
+                            e.touched[i] = true;
+                            n += 1;
+                        }
+                    }
+                    e.note = Some(if n == 0 {
+                        "Nothing new in the file name".into()
+                    } else {
+                        format!("Filled {n} from the file name · check, then enter to save")
+                    });
+                } else {
+                    let i = rows[e.row];
+                    if edit(&mut e.values[i], &k) {
+                        e.touched[i] = true;
+                        e.note = None;
+                    }
+                }
+                true
+            }
             Dialog::PlaylistPick { nodes, tracks, entries, cursor } => {
                 match k.code {
                     _ if esc => return false,
@@ -431,6 +520,47 @@ impl Dialog {
                 let shown = tail(value, field.width as usize - 2);
                 put(b, field.x + 1, field.y, &format!("{shown}▏"), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
                 hints_row(b, inner, "enter ok · esc cancel", muted);
+            }
+            Dialog::Tags(e) => {
+                let rows = e.rows();
+                let title = if e.paths.len() == 1 { "Edit tags".to_string() } else { format!("Edit tags · {} songs", e.paths.len()) };
+                let inner = frame(f, app, 72, rows.len() as u16 + 7, &title);
+                let b = f.buffer_mut();
+                let what = if e.paths.len() == 1 {
+                    e.paths[0].file_name().unwrap_or_default().to_string_lossy().into_owned()
+                } else {
+                    "Changes apply to every song. Empty = remove.".into()
+                };
+                put(b, inner.x + 2, inner.y + 1, &what, inner.width.saturating_sub(4), muted);
+                let fx = inner.x + 17;
+                let fw = (inner.x + inner.width).saturating_sub(fx + 2);
+                for (k, &i) in rows.iter().enumerate() {
+                    let y = inner.y + 3 + k as u16;
+                    let sel = k == e.row;
+                    let changed = e.touched[i] && (e.mixed[i] || e.values[i].trim() != e.orig[i]);
+                    put(b, inner.x + 2, y, if changed { "•" } else { " " }, 1, Style::default().fg(c(t.warn)).bg(c(t.dialog_bg)));
+                    put(b, inner.x + 4, y, tagedit::FIELDS[i], 13, if sel { bold } else { muted });
+                    let bg = if sel { t.title_bar } else { t.dialog_bg };
+                    let field = Rect { x: fx, y, width: fw, height: 1 };
+                    fill(b, field, bg);
+                    let st = Style::default().fg(c(t.fg)).bg(c(bg));
+                    if e.values[i].is_empty() && e.mixed[i] && !e.touched[i] {
+                        put(
+                            b,
+                            fx + 1,
+                            y,
+                            if sel { "▏(mixed)" } else { "(mixed)" },
+                            fw.saturating_sub(1),
+                            Style::default().fg(c(t.muted)).bg(c(bg)),
+                        );
+                    } else if sel {
+                        put(b, fx + 1, y, &format!("{}▏", tail(&e.values[i], fw as usize - 2)), fw.saturating_sub(1), st);
+                    } else {
+                        put(b, fx + 1, y, &e.values[i], fw.saturating_sub(2), st);
+                    }
+                }
+                let hint = e.note.clone().unwrap_or_else(|| "enter save · ctrl+f from file name · esc cancel".into());
+                hints_row(b, inner, &hint, muted);
             }
             Dialog::Sleep { cursor } => {
                 let inner = frame(f, app, 40, SLEEP.len() as u16 + 4, "Sleep timer");

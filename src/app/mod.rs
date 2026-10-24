@@ -479,7 +479,7 @@ impl App {
                 self.engine.queue.lock().insert_next(tracks, Some(from));
                 self.info(format!("{n} will play next"));
             }
-            Then::AddToPlaylist(_) => {}
+            Then::AddToPlaylist(_) | Then::EditTags => {}
         }
         self.fill_queue_view();
         self.rebuild_side();
@@ -790,6 +790,11 @@ impl App {
                     self.worker.send(Job::Like(t.tref().clone()));
                 }
             }
+            Action::EditTags => {
+                if let Some((nodes, tracks, _)) = self.targets() {
+                    self.send_job(Job::Tracks { nodes, tracks, then: Then::EditTags });
+                }
+            }
             Action::AddToPlaylist => {
                 if let Some((nodes, tracks, _)) = self.targets() {
                     self.dialog = Some(Dialog::playlist_pick(nodes, tracks, &self.playlists));
@@ -997,10 +1002,10 @@ impl App {
     fn on_lib(&mut self, e: LibEvent) {
         match e {
             LibEvent::Progress { done, total } => self.scan = if total > 0 { Some((done, total)) } else { None },
-            LibEvent::Done { added, removed, total } => {
+            LibEvent::Done { added, updated, removed, total } => {
                 self.scan = None;
                 self.library_size = total;
-                if added > 0 || removed > 0 {
+                if added > 0 || removed > 0 || updated > 0 {
                     for v in &mut self.lists {
                         v.loading = true;
                     }
@@ -1008,7 +1013,9 @@ impl App {
                     for n in nodes {
                         self.reload_lists_matching(&n);
                     }
-                    self.info(format!("Library: {total} songs"));
+                    if added > 0 || removed > 0 {
+                        self.info(format!("Library: {total} songs"));
+                    }
                 }
             }
             LibEvent::Loudness { done, total } => self.loudness = if done < total { Some((done, total)) } else { None },
@@ -1049,6 +1056,17 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::EditTags(paths, fields) => self.dialog = Some(Dialog::tags(paths, fields)),
+            Msg::TagsSaved { ok, failed } => {
+                if failed.is_empty() {
+                    self.info(format!("Saved tags for {ok} song{}", if ok == 1 { "" } else { "s" }));
+                } else {
+                    self.error(format!("Saved {ok}, failed {}: {}", failed.len(), failed[0]));
+                }
+                if ok > 0 {
+                    self.lib.scan();
+                }
+            }
             Msg::Playlists(p) => {
                 self.playlists = p;
                 self.rebuild_side();

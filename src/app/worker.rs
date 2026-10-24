@@ -18,6 +18,7 @@ pub enum Then {
     Queue { from: String },
     PlayNext { from: String },
     AddToPlaylist(i64),
+    EditTags,
 }
 
 pub enum Job {
@@ -38,6 +39,10 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    WriteTags {
+        paths: Vec<std::path::PathBuf>,
+        fields: [Option<String>; 8],
+    },
     FetchLyrics {
         track: Arc<Track>,
         next_to_song: bool,
@@ -83,6 +88,12 @@ pub enum Job {
 }
 
 pub enum Msg {
+    /// Tags read for the editor: file paths, each file's fields.
+    EditTags(Vec<std::path::PathBuf>, Vec<crate::library::tagedit::Fields>),
+    TagsSaved {
+        ok: usize,
+        failed: Vec<String>,
+    },
     Children {
         seq: u64,
         items: Result<Vec<Item>, String>,
@@ -187,8 +198,37 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                         Err(e) => send(err(e)),
                     }
                 }
+                Then::EditTags => {
+                    let paths: Vec<_> = tracks
+                        .iter()
+                        .filter(|t| &*t.tref().source == crate::source::local::ID)
+                        .map(|t| std::path::PathBuf::from(&*t.tref().id))
+                        .collect();
+                    let mut fields = Vec::with_capacity(paths.len());
+                    for p in &paths {
+                        match crate::library::tagedit::read(p) {
+                            Ok(f) => fields.push(f),
+                            Err(e) => return send(Msg::Error(format!("Can't read tags of {}: {e:#}", p.display()))),
+                        }
+                    }
+                    if paths.is_empty() {
+                        return send(Msg::Error("No song files to edit here".into()));
+                    }
+                    send(Msg::EditTags(paths, fields));
+                }
                 then => send(Msg::Tracks { tracks, then }),
             }
+        }
+        Job::WriteTags { paths, fields } => {
+            let mut ok = 0;
+            let mut failed = Vec::new();
+            for p in &paths {
+                match crate::library::tagedit::write(p, &fields) {
+                    Ok(()) => ok += 1,
+                    Err(e) => failed.push(format!("{}: {e:#}", p.file_name().unwrap_or_default().to_string_lossy())),
+                }
+            }
+            send(Msg::TagsSaved { ok, failed });
         }
         Job::RecordPlay(r) => {
             if let Err(e) = db::record_play(&local.conn(), &r.source, &r.id) {

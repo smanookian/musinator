@@ -43,6 +43,7 @@ pub enum Action {
     Remove,
     Like,
     AddToPlaylist,
+    EditTags,
     NewPlaylist,
     GridView,
     PaneShrink,
@@ -110,6 +111,7 @@ actions! {
     Rate5 "rate_5" "Library" "Rate 5 stars" ["5"];
     RateClear "rate_clear" "Library" "Clear rating" ["0"];
     AddToPlaylist "add_to_playlist" "Library" "Add to playlist" ["P"];
+    EditTags "edit_tags" "Library" "Edit tags (song or album)" ["e"];
     NewPlaylist "new_playlist" "Library" "New playlist" ["N"];
     RenamePlaylist "rename_playlist" "Library" "Rename playlist" ["R"];
     ExportPlaylist "export_playlist" "Library" "Export playlist (.m3u8)" ["E"];

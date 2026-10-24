@@ -80,6 +80,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `R` / `E` | rename / export playlist |
 | `L` | like |
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
+| `e` | edit tags of the song, or of every song in an album / folder. `ctrl+f` in the editor fills tags from the file and folder name. Musinator writes a copy first, then replaces the file. |
 | `m` | mini mode: 3 lines for a small window (turns on by itself when the window is small) |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |
