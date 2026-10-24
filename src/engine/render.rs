@@ -1,5 +1,6 @@
 //! The real-time side: pulls samples from the ring, applies volume with a short
-//! ramp (no clicks), feeds the visualizer tap. No locks, no allocation.
+//! ramp (no clicks), runs the equalizer, feeds the visualizer tap.
+//! No locks, no allocation.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering::*};
@@ -23,6 +24,10 @@ pub struct Shared {
     /// Time from handing samples to PipeWire until they are heard (µs).
     pub latency_us: AtomicU32,
     pub channels: AtomicU32,
+    /// Equalizer: on/off, band gains (dB, f32 bits), bumped on every change.
+    eq_on: AtomicBool,
+    eq_db: [AtomicU32; 10],
+    eq_gen: AtomicU32,
 }
 
 impl Shared {
@@ -38,6 +43,13 @@ impl Shared {
     }
     pub fn volume(&self) -> f32 {
         f32::from_bits(self.volume.load(Relaxed))
+    }
+    pub fn set_eq(&self, on: bool, gains: &[f32; 10]) {
+        for (a, g) in self.eq_db.iter().zip(gains) {
+            a.store(g.to_bits(), Relaxed);
+        }
+        self.eq_on.store(on, Relaxed);
+        self.eq_gen.fetch_add(1, Release);
     }
 }
 
@@ -89,11 +101,14 @@ pub struct Renderer {
     tap: Arc<Tap>,
     consumed: u64,
     gain: f32,
+    eq: super::eq::Eq,
+    /// (settings generation, rate) the EQ was set up for.
+    eq_for: (u32, u32),
 }
 
 impl Renderer {
     pub fn new(cons: rtrb::Consumer<f32>, shared: Arc<Shared>, tap: Arc<Tap>) -> Self {
-        Self { cons, shared, tap, consumed: 0, gain: 0.0 }
+        Self { cons, shared, tap, consumed: 0, gain: 0.0, eq: Default::default(), eq_for: (u32::MAX, 0) }
     }
 
     /// Samples waiting in the ring.
@@ -115,6 +130,7 @@ impl Renderer {
             }
             // Ramp in after a jump so it does not click.
             self.gain = 0.0;
+            self.eq.reset();
             if self.consumed < flush_to {
                 // Old samples not all here yet: play silence this cycle.
                 out.fill(0.0);
@@ -132,6 +148,17 @@ impl Renderer {
         }
         self.shared.silent.store(false, Release);
 
+        let eq_gen = self.shared.eq_gen.load(Acquire);
+        if self.eq_for != (eq_gen, rate) {
+            let gains: [f32; 10] = std::array::from_fn(|i| f32::from_bits(self.shared.eq_db[i].load(Relaxed)));
+            let was = self.eq.is_on();
+            self.eq.set(self.shared.eq_on.load(Relaxed), &gains, rate);
+            if !was {
+                self.eq.reset();
+            }
+            self.eq_for = (eq_gen, rate);
+        }
+
         // 10 ms linear ramp toward the target gain.
         let step = 1.0 / (rate.max(8000) as f32 * 0.010);
         let frames_out = out.len() / channels;
@@ -148,6 +175,7 @@ impl Renderer {
             let (a, b) = chunk.as_slices();
             let mut acc = 0.0f32;
             for (i, &s) in a.iter().chain(b.iter()).enumerate() {
+                let s = self.eq.process(s, i % channels);
                 if i % channels == 0 {
                     if self.gain < target {
                         self.gain = (self.gain + step).min(target);

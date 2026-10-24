@@ -571,12 +571,15 @@ pub fn audio_info(app: &App) -> Vec<(String, Rgb)> {
     if next_same {
         out.push((" · gapless".into(), t.muted));
     }
+    if app.eq_active() {
+        out.push((format!(" · EQ {}", app.cfg.eq_preset), t.accent));
+    }
     match s.gain_db {
         Some(g) => {
             let tag = if s.gain_origin == crate::model::GainOrigin::Measured { "R128" } else { "RG" };
             out.push((format!(" · {tag} {}{:.1} dB", if g < 0.0 { "−" } else { "+" }, g.abs()), t.muted));
         }
-        None if rate_ok && out_rate != 0 && s.volume >= 1.0 => out.push((" · bit-perfect".into(), t.good)),
+        None if rate_ok && out_rate != 0 && s.volume >= 1.0 && !app.eq_active() => out.push((" · bit-perfect".into(), t.good)),
         None => {}
     }
     out
@@ -670,7 +673,14 @@ fn now_panel(f: &mut Frame, app: &mut App, area: Rect) {
             let st = Style::default().fg(c(*col));
             cx = put(buf, cx, y0 + 4, s, (x + w).saturating_sub(cx), if *bold { st.add_modifier(Modifier::BOLD) } else { st });
         }
-        let info = audio_info(app);
+        let mut info = audio_info(app);
+        // Too wide: drop the least important parts first, keep format and EQ.
+        for drop in [" · gapless", " · R", " · bit-perfect"] {
+            if cx + 3 + spans_width(&info) <= x + w {
+                break;
+            }
+            info.retain(|(s, _)| !s.starts_with(drop));
+        }
         let iw = spans_width(&info);
         if cx + 3 + iw <= x + w {
             put_spans(buf, x + w - iw, y0 + 4, &info, x + w);

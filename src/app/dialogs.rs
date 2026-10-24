@@ -51,17 +51,60 @@ pub enum InputFor {
 
 pub enum Dialog {
     Quit,
-    Confirm { msg: String, what: Confirm },
-    Search { input: String, cursor: usize, offset: usize, typed: Option<Instant> },
-    Themes { list: Vec<Theme>, cursor: usize, offset: usize },
-    Settings { section: usize, row: usize, right: bool },
-    Help { filter: String, offset: usize },
-    Keys { cursor: usize, offset: usize, capture: bool, msg: Option<String> },
-    Folders { cursor: usize, changed: bool },
-    Sleep { cursor: usize },
-    Input { title: &'static str, label: &'static str, value: String, what: InputFor },
+    Confirm {
+        msg: String,
+        what: Confirm,
+    },
+    Search {
+        input: String,
+        cursor: usize,
+        offset: usize,
+        typed: Option<Instant>,
+    },
+    Themes {
+        list: Vec<Theme>,
+        cursor: usize,
+        offset: usize,
+    },
+    Settings {
+        section: usize,
+        row: usize,
+        right: bool,
+    },
+    Help {
+        filter: String,
+        offset: usize,
+    },
+    Keys {
+        cursor: usize,
+        offset: usize,
+        capture: bool,
+        msg: Option<String>,
+    },
+    Folders {
+        cursor: usize,
+        changed: bool,
+    },
+    Sleep {
+        cursor: usize,
+    },
+    Input {
+        title: &'static str,
+        label: &'static str,
+        value: String,
+        what: InputFor,
+    },
     Tags(Box<TagEdit>),
-    PlaylistPick { nodes: Vec<String>, tracks: Vec<Arc<Track>>, entries: Vec<(Option<i64>, String)>, cursor: usize },
+    /// Equalizer; `band` is the selected band.
+    Eq {
+        band: usize,
+    },
+    PlaylistPick {
+        nodes: Vec<String>,
+        tracks: Vec<Arc<Track>>,
+        entries: Vec<(Option<i64>, String)>,
+        cursor: usize,
+    },
 }
 
 /// The tag editor: one song, or many (then only shared fields are shown).
@@ -573,6 +616,51 @@ impl Dialog {
                 }
                 true
             }
+            Dialog::Eq { band } => {
+                use crate::engine::eq::{MAX_DB, PRESETS};
+                let cfg = &mut app.cfg;
+                let mut changed = true;
+                match k.code {
+                    _ if esc => return false,
+                    KeyCode::Left | KeyCode::Char('h') => {
+                        *band = band.saturating_sub(1);
+                        changed = false;
+                    }
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        *band = (*band + 1).min(9);
+                        changed = false;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') | KeyCode::Down | KeyCode::Char('j') | KeyCode::Char('0') => {
+                        let g = &mut cfg.eq_bands[*band];
+                        *g = match k.code {
+                            KeyCode::Char('0') => 0.0,
+                            KeyCode::Up | KeyCode::Char('k') => (*g + 1.0).min(MAX_DB),
+                            _ => (*g - 1.0).max(-MAX_DB),
+                        };
+                        cfg.eq_on = true;
+                        cfg.eq_preset = PRESETS.iter().find(|p| p.1 == cfg.eq_bands).map(|p| p.0).unwrap_or("Custom").to_string();
+                    }
+                    KeyCode::Char('p') | KeyCode::Tab | KeyCode::Char('P') | KeyCode::BackTab => {
+                        let back = matches!(k.code, KeyCode::Char('P') | KeyCode::BackTab);
+                        let n = PRESETS.len();
+                        let i = PRESETS.iter().position(|p| p.0 == cfg.eq_preset).map(|i| if back { (i + n - 1) % n } else { (i + 1) % n });
+                        let i = i.unwrap_or(if back { n - 1 } else { 0 });
+                        cfg.eq_preset = PRESETS[i].0.to_string();
+                        cfg.eq_bands = PRESETS[i].1;
+                        cfg.eq_on = true;
+                    }
+                    KeyCode::Char(' ') | KeyCode::Char('e') => cfg.eq_on = !cfg.eq_on,
+                    KeyCode::Char('r') => {
+                        cfg.eq_bands = [0.0; 10];
+                        cfg.eq_preset = "Flat".into();
+                    }
+                    _ => changed = false,
+                }
+                if changed {
+                    app.apply_eq();
+                }
+                true
+            }
             Dialog::Tags(e) => {
                 let rows = e.rows();
                 let on_cover = rows[e.row] == COVER_ROW;
@@ -734,6 +822,7 @@ impl Dialog {
                 put(b, field.x + 1, field.y, &format!("{shown}▏"), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
                 hints_row(b, inner, "enter ok · esc cancel", muted);
             }
+            Dialog::Eq { band } => draw_eq(f, app, *band),
             Dialog::Tags(e) if e.mb.is_some() => {
                 let (list, cur) = e.mb.as_ref().expect("checked");
                 let h = (list.len() as u16 + 5).min(area.height.saturating_sub(4));
@@ -1310,4 +1399,101 @@ fn help_lines(keys: &Keymap, filter: &str) -> Vec<(bool, String, String)> {
         out.extend(tips.into_iter().map(|(k, l)| (false, k.to_string(), l.to_string())));
     }
     out
+}
+
+/// The equalizer window: the curve on top, then one column per band.
+fn draw_eq(f: &mut Frame, app: &mut App, band: usize) {
+    use crate::engine::eq::{BANDS, Eq, LABELS, MAX_DB};
+    let t = app.theme.clone();
+    let cfg = &app.cfg;
+    let state = if cfg.eq_on { "on" } else { "off" };
+    let inner = frame(f, app, 74, 22, &format!("Equalizer · {state} · {}", cfg.eq_preset));
+    let gains = cfg.eq_bands;
+    let on = cfg.eq_on;
+    // The curve shows the shape; the level drop that prevents distortion is noted below.
+    let pre = crate::engine::eq::preamp_db(&gains);
+    let b = f.buffer_mut();
+    let muted = Style::default().fg(c(t.muted)).bg(c(t.dialog_bg));
+    // Curve area: braille dots, 2×4 per cell, log frequency from 20 Hz to 20 kHz.
+    let gx = inner.x + 6;
+    let gw = inner.width.saturating_sub(8);
+    let gy = inner.y + 1;
+    let gh: u16 = 11;
+    let rows = gh as usize * 4;
+    let ypos = |db: f32| -> usize { (((MAX_DB - db.clamp(-MAX_DB, MAX_DB)) / (2.0 * MAX_DB)) * (rows - 1) as f32).round() as usize };
+    let fx = |x: usize, w: usize| -> f32 { 20.0 * 1000f32.powf(x as f32 / (w - 1) as f32) };
+    let xof = |freq: f32, w: usize| -> usize { ((freq / 20.0).log10() / 3.0 * (w - 1) as f32).round() as usize };
+    for (lbl, db) in [("+12", MAX_DB), ("  0", 0.0), ("−12", -MAX_DB)] {
+        put(b, inner.x + 1, gy + (ypos(db) / 4) as u16, lbl, 4, muted);
+    }
+    // Zero line.
+    let zy = gy + (ypos(0.0) / 4) as u16;
+    for x in 0..gw {
+        put(b, gx + x, zy, "┈", 1, Style::default().fg(c(t.border)).bg(c(t.dialog_bg)));
+    }
+    let dots_w = gw as usize * 2;
+    if dots_w > 2 {
+        let mut cells = vec![0u8; gw as usize * gh as usize];
+        let mut prev: Option<usize> = None;
+        for x in 0..dots_w {
+            let db = if on { Eq::response_db(&gains, fx(x, dots_w), 48_000) - pre } else { 0.0 };
+            let y = ypos(db);
+            // Fill between neighbours so steep parts stay connected.
+            let (lo, hi) = match prev {
+                Some(p) => (p.min(y), p.max(y)),
+                None => (y, y),
+            };
+            // Two dots thick.
+            for yy in lo..=(hi + 1).min(rows - 1) {
+                let bit = match (x % 2, yy % 4) {
+                    (0, 0) => 0x01,
+                    (0, 1) => 0x02,
+                    (0, 2) => 0x04,
+                    (0, _) => 0x40,
+                    (_, 0) => 0x08,
+                    (_, 1) => 0x10,
+                    (_, 2) => 0x20,
+                    _ => 0x80,
+                };
+                cells[(yy / 4) * gw as usize + x / 2] |= bit;
+            }
+            prev = Some(y);
+        }
+        let col = if on { t.accent } else { t.muted };
+        for (i, &m) in cells.iter().enumerate() {
+            if m != 0 {
+                let ch = char::from_u32(0x2800 + m as u32).unwrap_or(' ');
+                let (x, y) = (gx + (i % gw as usize) as u16, gy + (i / gw as usize) as u16);
+                b[(x, y)].set_char(ch).set_style(Style::default().fg(c(col)).bg(c(t.dialog_bg)));
+            }
+        }
+        // Mark the selected band on the curve.
+        let x = xof(BANDS[band], dots_w) / 2;
+        let db = if on { Eq::response_db(&gains, BANDS[band], 48_000) - pre } else { 0.0 };
+        put(b, gx + x as u16, gy + (ypos(db) / 4) as u16, "●", 1, Style::default().fg(c(t.marker)).bg(c(t.dialog_bg)));
+    }
+    // Band columns: value and label under each band's spot on the curve.
+    let vy = gy + gh + 1;
+    for i in 0..10 {
+        let x = gx + (xof(BANDS[i], dots_w.max(2)) / 2) as u16;
+        let sel = i == band;
+        let v = gains[i];
+        let val = if v == 0.0 { "0".to_string() } else { format!("{v:+.0}") };
+        let st = if sel {
+            Style::default().fg(c(t.selection_fg)).bg(c(t.selection)).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(c(if v == 0.0 { t.muted } else { t.fg })).bg(c(t.dialog_bg))
+        };
+        let lx = x.saturating_sub(1).max(gx);
+        put(b, lx, vy, &format!("{val:^3}"), 3, st);
+        put(b, lx, vy + 1, &format!("{:^3}", LABELS[i]), 3, if sel { st } else { muted });
+    }
+    put(b, inner.x + 1, vy, "dB", 3, muted);
+    if on && pre < 0.0 {
+        let note = format!("level lowered {:.0} dB so boosts don't distort", -pre);
+        put(b, gx, vy + 3, &note, gw, muted);
+    }
+    put(b, inner.x + 1, vy + 1, "Hz", 3, muted);
+    hints_row(b, Rect { height: inner.height - 1, ..inner }, "←/→ band · ↑/↓ ±1 dB · 0 reset band · r flat", muted);
+    hints_row(b, inner, "p / P preset · space on/off · esc close", muted);
 }

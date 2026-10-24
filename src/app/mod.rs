@@ -180,6 +180,17 @@ impl App {
         self.lists.last_mut()
     }
 
+    /// The equalizer changes the sound (on and not flat).
+    pub fn eq_active(&self) -> bool {
+        self.cfg.eq_on && self.cfg.eq_bands.iter().any(|g| g.abs() > 0.01)
+    }
+
+    /// Apply and save equalizer settings.
+    pub fn apply_eq(&mut self) {
+        self.engine.set_eq(self.cfg.eq_on, &self.cfg.eq_bands);
+        self.save_cfg();
+    }
+
     pub fn now(&self) -> crate::engine::Snapshot {
         self.engine.snapshot()
     }
@@ -752,6 +763,7 @@ impl App {
             Action::MiniMode => self.mini = !self.mini,
             Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
+            Action::Equalizer => self.dialog = Some(Dialog::Eq { band: 0 }),
             Action::LyricsEarlier | Action::LyricsLater => {
                 let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {
                     self.info("No lyrics for this song");
@@ -1346,6 +1358,7 @@ pub fn run(cfg: Config) -> Result<()> {
     sources.add(local.clone());
     let sources = Arc::new(sources);
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
+    engine.set_eq(cfg.eq_on, &cfg.eq_bands);
 
     let ipc_rx = ipc::serve()?;
 

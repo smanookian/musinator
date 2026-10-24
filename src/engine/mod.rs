@@ -5,6 +5,7 @@
 //! are tracked by sample index, so "now playing" switches when you *hear* the
 //! boundary. Same-format tracks flow straight into each other (gapless).
 
+pub mod eq;
 pub mod gain;
 pub mod pw;
 pub mod queue;
@@ -199,6 +200,11 @@ impl Engine {
 
     pub fn snapshot(&self) -> Snapshot {
         self.snap.lock().clone()
+    }
+
+    /// Equalizer settings; take effect within one audio buffer.
+    pub fn set_eq(&self, on: bool, gains: &[f32; 10]) {
+        self.shared.set_eq(on, gains);
     }
 
     /// New info for songs (tags or cover changed): update the queue and "now playing".

@@ -41,6 +41,10 @@ pub struct Config {
     pub omarchy_bar: bool,
     pub mpris: bool,
     pub sidebar_width: u16,
+    /// Equalizer on/off, preset name ("Custom" = own settings), band gains in dB.
+    pub eq_on: bool,
+    pub eq_preset: String,
+    pub eq_bands: [f32; 10],
     pub keys: HashMap<String, Vec<String>>,
 }
 
@@ -76,6 +80,9 @@ impl Default for Config {
             save_lyrics_next: false,
             omarchy_bar: false,
             mpris: true,
+            eq_on: false,
+            eq_preset: "Flat".into(),
+            eq_bands: [0.0; 10],
             sidebar_width: 30,
             keys: HashMap::new(),
         }

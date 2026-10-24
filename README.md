@@ -81,6 +81,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `L` | like |
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
 | `e` | edit tags of the song, or of every song in an album / folder. `ctrl+f` fills tags from the file and folder name. **Cover:** type a picture path (JPEG/PNG kept as is, other formats become JPEG); it goes inside every song, and for an album also as `cover.jpg` in the folder. `ctrl+x` removes it. **`ctrl+b`** looks the album up on [MusicBrainz](https://musicbrainz.org): pick the release, and it fills titles, artist, album, year, track and disc numbers, plus the front cover from the [Cover Art Archive](https://coverartarchive.org). Only artist and album names are sent, and only when you press it. Nothing is saved until you press `enter`. Musinator writes a copy first, then replaces the file. |
+| `ctrl+e` | equalizer: 10 bands with a live curve, presets (Rock, Pop, Jazz, …) or your own; `space` on/off. Boosts lower the overall level so nothing distorts. |
 | `m` | mini mode: 3 lines for a small window (turns on by itself when the window is small) |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |

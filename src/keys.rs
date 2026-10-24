@@ -53,6 +53,7 @@ pub enum Action {
     ExportPlaylist,
     ClearQueue,
     SleepTimer,
+    Equalizer,
     LyricsEarlier,
     FetchLyrics,
     FullLyrics,
@@ -95,6 +96,7 @@ actions! {
     Shuffle "shuffle" "Playback" "Shuffle on / off" ["s"];
     Repeat "repeat" "Playback" "Repeat: off, all, one" ["r"];
     SleepTimer "sleep_timer" "Playback" "Sleep timer" ["ctrl+t"];
+    Equalizer "equalizer" "Playback" "Equalizer (10 bands)" ["ctrl+e"];
     AddQueue "add_queue" "Queue" "Add to queue" ["a"];
     PlayNext "play_next" "Queue" "Play next" ["A"];
     MoveDown "move_down" "Queue" "Move item down" ["J"];
