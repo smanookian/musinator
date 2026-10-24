@@ -192,10 +192,11 @@ impl Chord {
             }
             _ => return None,
         };
-        if matches!(code, KeyCode::Char(c) if c.is_ascii_alphabetic()) && mods.contains(KeyModifiers::CONTROL) {
-            if let KeyCode::Char(c) = code {
-                return Some(Self { code: KeyCode::Char(c.to_ascii_lowercase()), mods });
-            }
+        if matches!(code, KeyCode::Char(c) if c.is_ascii_alphabetic())
+            && mods.contains(KeyModifiers::CONTROL)
+            && let KeyCode::Char(c) = code
+        {
+            return Some(Self { code: KeyCode::Char(c.to_ascii_lowercase()), mods });
         }
         Some(Self { code, mods })
     }

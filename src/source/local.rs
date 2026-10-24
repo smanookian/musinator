@@ -199,7 +199,7 @@ impl Source for LocalSource {
             return Ok(SearchHits::default());
         }
         let c = self.conn.lock();
-        let like = format!("%{}%", q.replace('%', "").replace('_', ""));
+        let like = format!("%{}%", q.replace(['%', '_'], ""));
         let mut hits = SearchHits::default();
         let mut st = c.prepare_cached(
             "SELECT artist, COUNT(*) FROM albums WHERE artist LIKE ?1 GROUP BY lower(artist) ORDER BY lower(artist) LIMIT ?2",

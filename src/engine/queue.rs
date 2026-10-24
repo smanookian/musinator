@@ -157,10 +157,11 @@ impl Queue {
 
     /// The item to play after `id`. `auto` = reached the end on its own (repeat-one applies).
     pub fn next_after(&self, id: Option<u64>, auto: bool) -> Option<&QueueItem> {
-        if auto && self.repeat == Repeat::One {
-            if let Some(it) = id.and_then(|id| self.get(id)) {
-                return Some(it);
-            }
+        if auto
+            && self.repeat == Repeat::One
+            && let Some(it) = id.and_then(|id| self.get(id))
+        {
+            return Some(it);
         }
         let next = match id.and_then(|id| self.index_of(id)) {
             Some(i) => i + 1,

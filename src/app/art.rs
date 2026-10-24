@@ -78,10 +78,10 @@ impl ArtWorker {
                                 let img = load(&sources, &r.art).map(Arc::new);
                                 mem.insert(r.art.clone(), img.clone());
                                 order.push_back(r.art.clone());
-                                if order.len() > 96 {
-                                    if let Some(old) = order.pop_front() {
-                                        mem.remove(&old);
-                                    }
+                                if order.len() > 96
+                                    && let Some(old) = order.pop_front()
+                                {
+                                    mem.remove(&old);
                                 }
                                 img
                             }

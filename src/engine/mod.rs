@@ -535,12 +535,12 @@ impl Worker {
         }
         self.flush();
         let d = self.dec.as_mut().unwrap();
-        if let Some(len) = d.stream.info().duration() {
-            if to >= len {
-                // Seeking past the end = next track.
-                self.handle(Cmd::Next);
-                return;
-            }
+        if let Some(len) = d.stream.info().duration()
+            && to >= len
+        {
+            // Seeking past the end = next track.
+            self.handle(Cmd::Next);
+            return;
         }
         let pos = match d.stream.seek(to) {
             Ok(p) => p,

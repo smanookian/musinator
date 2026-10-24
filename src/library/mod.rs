@@ -84,10 +84,11 @@ impl Library {
                     if let Err(e) = me.scan_once() {
                         let _ = me.tx.send(LibEvent::Error(format!("Scan failed: {e:#}")));
                     }
-                    if me.measure_loudness.load(Relaxed) && !me.again.load(Acquire) {
-                        if let Err(e) = me.measure() {
-                            let _ = me.tx.send(LibEvent::Error(format!("Loudness: {e:#}")));
-                        }
+                    if me.measure_loudness.load(Relaxed)
+                        && !me.again.load(Acquire)
+                        && let Err(e) = me.measure()
+                    {
+                        let _ = me.tx.send(LibEvent::Error(format!("Loudness: {e:#}")));
                     }
                     if !me.again.load(Acquire) {
                         break;
@@ -254,10 +255,10 @@ impl Library {
         use notify::{RecursiveMode, Watcher};
         let (tx, rx) = cb::unbounded::<()>();
         let w = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(e) = res {
-                if !matches!(e.kind, notify::EventKind::Access(_)) {
-                    let _ = tx.send(());
-                }
+            if let Ok(e) = res
+                && !matches!(e.kind, notify::EventKind::Access(_))
+            {
+                let _ = tx.send(());
             }
         });
         let Ok(mut w) = w else { return };

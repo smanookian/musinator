@@ -149,7 +149,7 @@ pub fn plan(seed: u64, n_tracks: usize, master_durations: &[f64]) -> Vec<AlbumPl
         let max_per_disc = if disc_total > 1 { 12 } else { 14 };
         let cover = match r.weighted(&[50, 25, 25]) {
             0 => Cover::Embedded { png: r.chance(0.1) },
-            1 => Cover::File(*r.pick(&[
+            1 => Cover::File(r.pick(&[
                 "cover.jpg",
                 "cover.jpg",
                 "cover.jpg",

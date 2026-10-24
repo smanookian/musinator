@@ -147,9 +147,9 @@ fn worst_snr(s: &[f32], rate: u32, pieces: &[usize], edge: usize) -> f64 {
         let from = start + edge.max(if i == 0 { (rate / 50) as usize } else { 0 });
         let to = (start + len - edge).min(l.len());
         let mut noise = 0.0;
-        for n in from..to {
+        for (n, x) in l.iter().enumerate().take(to).skip(from) {
             let ideal = AMP * (2.0 * std::f64::consts::PI * FREQ * n as f64 / rate as f64).sin();
-            noise += (l[n] - ideal).powi(2);
+            noise += (x - ideal).powi(2);
         }
         let noise = noise / (to.saturating_sub(from)).max(1) as f64;
         let snr = 10.0 * ((AMP * AMP / 2.0) / noise.max(1e-20)).log10();
@@ -186,8 +186,8 @@ fn play_all(files: &[PathBuf]) -> Vec<f32> {
         assert!(t0.elapsed() < Duration::from_secs(60));
     }
     drop(engine);
-    let v = cap.lock().clone();
-    v
+
+    cap.lock().clone()
 }
 
 #[test]
@@ -197,7 +197,8 @@ fn gapless_every_format() {
     let p44 = [44_100 + 17, 30_011, 52_919, 40_000];
     let p48 = [48_000 + 23, 31_337, 50_003, 44_444];
     // Minimum per-file SNR in dB: 16-bit lossless is ~86 dB at -12 dBFS.
-    let cases: &[(&str, &[&str], u32, &[usize], f64)] = &[
+    type Case<'a> = (&'a str, &'a [&'a str], u32, &'a [usize], f64);
+    let cases: &[Case] = &[
         ("wav", &["wav", "-c:a", "pcm_s16le"], 44_100, &p44, 75.0),
         ("flac", &["flac", "-c:a", "flac"], 44_100, &p44, 75.0),
         ("alac", &["m4a", "-c:a", "alac"], 44_100, &p44, 75.0),

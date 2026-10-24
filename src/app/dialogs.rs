@@ -87,11 +87,11 @@ impl Dialog {
     }
 
     pub fn tick(&mut self, app: &mut App) {
-        if let Dialog::Search { input, typed, .. } = self {
-            if typed.is_some_and(|t| t.elapsed() >= Duration::from_millis(120)) {
-                *typed = None;
-                app.search(input.clone());
-            }
+        if let Dialog::Search { input, typed, .. } = self
+            && typed.is_some_and(|t| t.elapsed() >= Duration::from_millis(120))
+        {
+            *typed = None;
+            app.search(input.clone());
         }
     }
 

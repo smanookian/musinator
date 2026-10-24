@@ -187,10 +187,10 @@ impl App {
     // ---------- theme ----------
 
     pub fn load_theme(id: &str) -> Theme {
-        if id == musinator_themes::omarchy::ID {
-            if let Some(t) = musinator_themes::omarchy::current() {
-                return t;
-            }
+        if id == musinator_themes::omarchy::ID
+            && let Some(t) = musinator_themes::omarchy::current()
+        {
+            return t;
         }
         musinator_themes::by_id(id).unwrap_or_else(|| musinator_themes::by_id(musinator_themes::DEFAULT_ID).expect("default theme"))
     }
@@ -216,13 +216,13 @@ impl App {
     }
 
     fn reload_omarchy(&mut self) {
-        if self.cfg.theme == musinator_themes::omarchy::ID && self.preview_theme.is_none() {
-            if let Some(t) = musinator_themes::omarchy::current() {
-                if t.label != self.theme.label || t.accent != self.theme.accent || t.bg != self.theme.bg {
-                    self.theme = t;
-                    self.dirty = true;
-                }
-            }
+        if self.cfg.theme == musinator_themes::omarchy::ID
+            && self.preview_theme.is_none()
+            && let Some(t) = musinator_themes::omarchy::current()
+            && (t.label != self.theme.label || t.accent != self.theme.accent || t.bg != self.theme.bg)
+        {
+            self.theme = t;
+            self.dirty = true;
         }
     }
 
@@ -250,10 +250,10 @@ impl App {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         self.side = s;
-        if let Some(k) = keep {
-            if let Some(i) = self.side.iter().position(|x| side_key(x) == k) {
-                self.side_cursor = i;
-            }
+        if let Some(k) = keep
+            && let Some(i) = self.side.iter().position(|x| side_key(x) == k)
+        {
+            self.side_cursor = i;
         }
         self.side_cursor = self.side_cursor.min(self.side.len() - 1);
         if !self.side[self.side_cursor].selectable() {
@@ -663,15 +663,15 @@ impl App {
             Action::MoveDown | Action::MoveUp => {
                 let d: isize = if a == Action::MoveDown { 1 } else { -1 };
                 if self.queue_view_active() {
-                    if let Some(id) = self.queue_cursor_id() {
-                        if self.engine.queue.lock().move_by(id, d) {
-                            if self.screen == Screen::NowPlaying {
-                                self.upnext_cursor = (self.upnext_cursor as isize + d).max(0) as usize;
-                            } else if let Some(v) = self.list_mut() {
-                                v.cursor = (v.cursor as isize + d).max(0) as usize;
-                            }
-                            self.after_queue_edit();
+                    if let Some(id) = self.queue_cursor_id()
+                        && self.engine.queue.lock().move_by(id, d)
+                    {
+                        if self.screen == Screen::NowPlaying {
+                            self.upnext_cursor = (self.upnext_cursor as isize + d).max(0) as usize;
+                        } else if let Some(v) = self.list_mut() {
+                            v.cursor = (v.cursor as isize + d).max(0) as usize;
                         }
+                        self.after_queue_edit();
                     }
                 } else if let Some((id, cur, n)) = self.list().and_then(|v| Some((v.playlist_id()?, v.cursor, v.items.len()))) {
                     let to = cur as isize + d;
@@ -691,13 +691,13 @@ impl App {
                         self.after_queue_edit();
                     }
                 } else if self.screen == Screen::Library && self.focus == Focus::List {
-                    if let Some((id, cur)) = self.list().and_then(|v| Some((v.playlist_id()?, v.cursor))) {
-                        if self.list().is_some_and(|v| cur < v.items.len()) {
-                            self.worker.send(Job::RemoveFromPlaylist { id, pos: cur as i64 });
-                            if let Some(v) = self.list_mut() {
-                                v.items.remove(cur);
-                                v.cursor = v.cursor.min(v.items.len().saturating_sub(1));
-                            }
+                    if let Some((id, cur)) = self.list().and_then(|v| Some((v.playlist_id()?, v.cursor)))
+                        && self.list().is_some_and(|v| cur < v.items.len())
+                    {
+                        self.worker.send(Job::RemoveFromPlaylist { id, pos: cur as i64 });
+                        if let Some(v) = self.list_mut() {
+                            v.items.remove(cur);
+                            v.cursor = v.cursor.min(v.items.len().saturating_sub(1));
                         }
                     }
                 } else if let Some(Side::Playlist { id, name, .. }) = self.selected_side().cloned() {
@@ -705,10 +705,10 @@ impl App {
                 }
             }
             Action::Like => {
-                if let Some((_, tracks, _)) = self.targets() {
-                    if let Some(t) = tracks.first() {
-                        self.worker.send(Job::Like(t.tref().clone()));
-                    }
+                if let Some((_, tracks, _)) = self.targets()
+                    && let Some(t) = tracks.first()
+                {
+                    self.worker.send(Job::Like(t.tref().clone()));
                 }
             }
             Action::AddToPlaylist => {
@@ -841,13 +841,13 @@ impl App {
                     if let Some(i) = self.hit.row_at(p) {
                         if self.screen == Screen::NowPlaying {
                             self.upnext_cursor = i;
-                        } else if let Some(v) = self.list_mut() {
-                            if i < v.items.len() {
-                                if v.cursor == i {
-                                    self.enter();
-                                } else {
-                                    v.cursor = i;
-                                }
+                        } else if let Some(v) = self.list_mut()
+                            && i < v.items.len()
+                        {
+                            if v.cursor == i {
+                                self.enter();
+                            } else {
+                                v.cursor = i;
                             }
                         }
                     }
@@ -864,11 +864,11 @@ impl App {
         match e {
             EngineEvent::Track(t) => {
                 if let Some(t) = &t {
-                    if let Some(r) = t.r.clone() {
-                        if self.lyrics.as_ref().is_none_or(|(lr, _)| *lr != r) {
-                            self.lyrics = None;
-                            self.worker.send(Job::Lyrics { track: r });
-                        }
+                    if let Some(r) = t.r.clone()
+                        && self.lyrics.as_ref().is_none_or(|(lr, _)| *lr != r)
+                    {
+                        self.lyrics = None;
+                        self.worker.send(Job::Lyrics { track: r });
                     }
                     self.art_file = t.art.as_ref().map(art::cache_file).filter(|p| p.exists());
                     if self.cfg.notifications {
@@ -900,11 +900,11 @@ impl App {
             EngineEvent::Error(e) => self.error(e),
             EngineEvent::Finished { track, listened } => {
                 let len = track.duration_ms.unwrap_or(0);
-                let need = Duration::from_millis((len / 2).min(240_000).max(1));
-                if listened >= need {
-                    if let Some(r) = track.r.clone() {
-                        self.worker.send(Job::RecordPlay(r));
-                    }
+                let need = Duration::from_millis((len / 2).clamp(1, 240_000));
+                if listened >= need
+                    && let Some(r) = track.r.clone()
+                {
+                    self.worker.send(Job::RecordPlay(r));
                 }
             }
         }
@@ -1097,13 +1097,13 @@ impl App {
             let bars = draw::viz_bars(self.viz_area);
             self.viz.update(&self.engine.tap, bars, dt);
         }
-        if let Some(d) = self.dialog.as_mut() {
-            if d.wants_tick() {
-                let mut d = self.dialog.take().unwrap();
-                d.tick(self);
-                if self.dialog.is_none() {
-                    self.dialog = Some(d);
-                }
+        if let Some(d) = self.dialog.as_mut()
+            && d.wants_tick()
+        {
+            let mut d = self.dialog.take().unwrap();
+            d.tick(self);
+            if self.dialog.is_none() {
+                self.dialog = Some(d);
             }
         }
         self.dirty = true;

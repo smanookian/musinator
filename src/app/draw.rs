@@ -440,27 +440,27 @@ fn art_or_placeholder(f: &mut Frame, app: &mut App, area: Rect, art: Option<&cra
         return;
     }
     let t = app.theme.clone();
-    if app.images_on {
-        if let Some(a) = art {
-            app.want_art(a, Size::new(area.width, area.height), slot);
-            let pic = match slot {
-                Slot::Grid => app.grid_pics.get(a),
-                _ => app.pics.iter().find(|(s, _)| *s == slot).map(|(_, p)| p),
+    if app.images_on
+        && let Some(a) = art
+    {
+        app.want_art(a, Size::new(area.width, area.height), slot);
+        let pic = match slot {
+            Slot::Grid => app.grid_pics.get(a),
+            _ => app.pics.iter().find(|(s, _)| *s == slot).map(|(_, p)| p),
+        };
+        if let Some(p) = pic.filter(|p| &p.art == a)
+            && let Some(proto) = &p.proto
+        {
+            let a2 = proto.size();
+            // Centre the image in the area.
+            let r = Rect {
+                x: area.x + area.width.saturating_sub(a2.width) / 2,
+                y: area.y + area.height.saturating_sub(a2.height) / 2,
+                width: a2.width.min(area.width),
+                height: a2.height.min(area.height),
             };
-            if let Some(p) = pic.filter(|p| &p.art == a) {
-                if let Some(proto) = &p.proto {
-                    let a2 = proto.size();
-                    // Centre the image in the area.
-                    let r = Rect {
-                        x: area.x + area.width.saturating_sub(a2.width) / 2,
-                        y: area.y + area.height.saturating_sub(a2.height) / 2,
-                        width: a2.width.min(area.width),
-                        height: a2.height.min(area.height),
-                    };
-                    f.render_widget(Image::new(proto), r);
-                    return;
-                }
-            }
+            f.render_widget(Image::new(proto), r);
+            return;
         }
     }
     let buf = f.buffer_mut();

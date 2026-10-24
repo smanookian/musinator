@@ -58,11 +58,11 @@ pub fn gain_db(cfg: &GainCfg, g: &Gain, album_context: bool) -> Option<f32> {
         None if cfg.fallback_db != 0.0 => cfg.fallback_db,
         None => return None,
     };
-    if cfg.prevent_clip {
-        if let Some(p) = peak.filter(|p| *p > 0.0) {
-            let max_db = -20.0 * p.log10();
-            db = db.min(max_db);
-        }
+    if cfg.prevent_clip
+        && let Some(p) = peak.filter(|p| *p > 0.0)
+    {
+        let max_db = -20.0 * p.log10();
+        db = db.min(max_db);
     }
     Some(db)
 }

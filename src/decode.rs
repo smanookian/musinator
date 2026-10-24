@@ -276,7 +276,7 @@ fn mp4_gapless(path: &Path) -> Option<Mp4Gapless> {
     let mut f = File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
     let moov = find_top_box(&mut f, len, b"moov")?;
-    let mvhd_ts = child(&moov, b"mvhd").and_then(|b| timescale(b))?;
+    let mvhd_ts = child(&moov, b"mvhd").and_then(timescale)?;
     let mut from_elst = None;
     for trak in children(&moov).filter(|(t, _)| t == b"trak").map(|(_, b)| b) {
         let Some(mdia) = child(trak, b"mdia") else { continue };
@@ -284,7 +284,7 @@ fn mp4_gapless(path: &Path) -> Option<Mp4Gapless> {
         if !is_audio {
             continue;
         }
-        let media_ts = child(mdia, b"mdhd").and_then(|b| timescale(b))?;
+        let media_ts = child(mdia, b"mdhd").and_then(timescale)?;
         if let Some(elst) = child(trak, b"edts").and_then(|e| child(e, b"elst")) {
             from_elst = parse_elst(elst, mvhd_ts, media_ts);
         }

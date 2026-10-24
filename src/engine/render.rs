@@ -144,9 +144,8 @@ impl Renderer {
         let tap_on = self.tap.enabled.load(Relaxed);
         if let Ok(chunk) = self.cons.read_chunk(n) {
             let (a, b) = chunk.as_slices();
-            let mut i = 0;
             let mut acc = 0.0f32;
-            for &s in a.iter().chain(b.iter()) {
+            for (i, &s) in a.iter().chain(b.iter()).enumerate() {
                 if i % channels == 0 {
                     if self.gain < target {
                         self.gain = (self.gain + step).min(target);
@@ -164,7 +163,6 @@ impl Renderer {
                         acc = 0.0;
                     }
                 }
-                i += 1;
             }
             chunk.commit_all();
             self.consumed += n as u64;

@@ -48,10 +48,10 @@ fn default_rates() -> String {
             let Ok(text) = std::fs::read_to_string(&f) else { continue };
             for line in text.lines() {
                 let l = line.trim();
-                if l.starts_with("default.clock.allowed-rates") {
-                    if let (Some(a), Some(b)) = (l.find('['), l.find(']')) {
-                        return l[a..=b].to_string();
-                    }
+                if l.starts_with("default.clock.allowed-rates")
+                    && let (Some(a), Some(b)) = (l.find('['), l.find(']'))
+                {
+                    return l[a..=b].to_string();
                 }
             }
         }

@@ -141,7 +141,7 @@ fn lib_song(idx: usize) -> (Song, f64) {
         layers: LIB_LAYERS[idx % LIB_LAYERS.len()],
         arranged: false,
         // Most masters are exact dual mono to keep lossless files small; every sixth is stereo.
-        width: if idx % 6 == 0 { 0.6 } else { 0.0 },
+        width: if idx.is_multiple_of(6) { 0.6 } else { 0.0 },
     };
     // Shift by idx / 8 so each layer mix gets several loudness levels.
     (song, LIB_PEAKS[(idx * 3 + 1 + idx / 8) % LIB_PEAKS.len()])

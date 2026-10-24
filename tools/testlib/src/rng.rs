@@ -34,7 +34,7 @@ impl Rng {
     /// Uniform in [0, n).
     pub fn below(&mut self, n: usize) -> usize {
         debug_assert!(n > 0);
-        ((self.next_u64() >> 32) * n as u64 >> 32) as usize
+        (((self.next_u64() >> 32) * n as u64) >> 32) as usize
     }
 
     /// Uniform in [lo, hi] (inclusive).

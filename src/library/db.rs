@@ -247,14 +247,13 @@ pub fn delete_playlist(c: &Connection, id: i64) -> Result<()> {
 
 pub fn add_to_playlist(c: &mut Connection, id: i64, tracks: &[Arc<Track>]) -> Result<()> {
     let tx = c.transaction()?;
-    let mut pos: i64 = tx.query_row("SELECT COALESCE(MAX(pos), -1) + 1 FROM playlist_items WHERE playlist_id=?1", [id], |r| r.get(0))?;
-    for t in tracks {
+    let start: i64 = tx.query_row("SELECT COALESCE(MAX(pos), -1) + 1 FROM playlist_items WHERE playlist_id=?1", [id], |r| r.get(0))?;
+    for (pos, t) in (start..).zip(tracks) {
         let r = t.tref();
         tx.execute(
             "INSERT INTO playlist_items(playlist_id, pos, source, track_id, title, artist, duration_ms) VALUES (?1,?2,?3,?4,?5,?6,?7)",
             params![id, pos, &*r.source, r.id, t.title, t.artist, t.duration_ms.map(|d| d as i64)],
         )?;
-        pos += 1;
     }
     tx.commit()?;
     Ok(())
