@@ -1112,22 +1112,28 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
         Rect { height: 3.min(area.height), ..area }
     };
     let snap = app.now();
-    // Where the cover and the three text lines go.
+    // One compact card centered in the window: cover + the three text lines.
     let mut text = Rect { height: 3.min(inner.height), ..inner };
     let mut cover: Option<Rect> = None;
     if snap.track.is_some() && inner.height >= 3 {
         if inner.width < inner.height * 3 && inner.height >= 8 {
-            // Tall: cover on top, text at the bottom.
-            let room = inner.height - 4;
-            let r = cover_rect(0, 0, room, inner.width);
-            cover = Some(Rect { x: inner.x + (inner.width - r.width) / 2, y: inner.y + (room - r.height) / 2, ..r });
-            text = Rect { y: inner.y + inner.height - 3, height: 3, ..inner };
+            // Tall: cover on top, text right under it with the cover's width.
+            let room = inner.height.saturating_sub(4).min(24);
+            let r = cover_rect(0, 0, room, inner.width.min(48));
+            let text_w = r.width.max(34).min(inner.width);
+            let block_h = r.height + 1 + 3;
+            let top = inner.y + (inner.height - block_h) / 2;
+            cover = Some(Rect { x: inner.x + (inner.width - r.width) / 2, y: top, ..r });
+            text = Rect { x: inner.x + (inner.width - text_w) / 2, y: top + r.height + 1, width: text_w, height: 3 };
         } else if inner.width >= 40 {
-            // Wide: cover on the left, text centered next to it.
-            let r = cover_rect(inner.x, inner.y, inner.height, inner.width / 3);
-            cover = Some(r);
-            let x = r.x + r.width + 2;
-            text = Rect { x, y: inner.y + (inner.height - 3) / 2, width: (inner.x + inner.width).saturating_sub(x), height: 3 };
+            // Wide: cover on the left, text next to it, the pair centered.
+            let r = cover_rect(0, 0, inner.height.min(12), inner.width / 3);
+            let text_w = (inner.width - r.width - 3).min(60);
+            let block_w = r.width + 3 + text_w;
+            let left = inner.x + (inner.width - block_w) / 2;
+            let top = inner.y + (inner.height - r.height) / 2;
+            cover = Some(Rect { x: left, y: top, ..r });
+            text = Rect { x: left + r.width + 3, y: top + r.height.saturating_sub(3) / 2, width: text_w, height: 3 };
         }
     }
     if cover.is_none() {
