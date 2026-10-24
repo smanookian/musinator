@@ -19,6 +19,7 @@ use crate::config::{Kind, SECTIONS, SETTINGS};
 use crate::engine::Cmd;
 use crate::keys::{ACTIONS, Chord, Keymap, chord_id};
 use crate::library::db::Playlist;
+use crate::library::musicbrainz::Release;
 use crate::library::tagedit::{self, Fields};
 use crate::model::{Track, fmt_time};
 use crate::source::{Item, Node, NodeKind};
@@ -80,6 +81,15 @@ pub struct TagEdit {
     /// A picture file path typed by the user.
     cover: String,
     cover_remove: bool,
+    /// (disc, track) of each file, for matching MusicBrainz songs.
+    files: Vec<(u32, u32)>,
+    /// MusicBrainz search hits being picked from, with the cursor.
+    mb: Option<(Vec<Release>, usize)>,
+    busy: bool,
+    /// Per-song tags from MusicBrainz (title, artist, track, disc).
+    per_song: Vec<[Option<String>; 8]>,
+    /// Cover from the Cover Art Archive and its label.
+    cover_data: Option<(Vec<u8>, String)>,
 }
 
 impl TagEdit {
@@ -120,6 +130,8 @@ const COVER_ROW: usize = 8;
 impl Dialog {
     pub fn tags(info: super::worker::EditInfo) -> Self {
         let all = info.fields;
+        let num = |s: &str| s.split('/').next().and_then(|n| n.trim().parse::<u32>().ok()).unwrap_or(0);
+        let files = all.iter().map(|f| (num(&f[6]), num(&f[5]))).collect();
         let mut orig: Fields = all[0].clone();
         let mut mixed = [false; 8];
         for f in &all[1..] {
@@ -156,9 +168,101 @@ impl Dialog {
             folder_cover: info.folder_cover,
             cover: String::new(),
             cover_remove: false,
+            files,
+            mb: None,
+            busy: false,
+            per_song: Vec::new(),
+            cover_data: None,
         };
         Dialog::Tags(Box::new(e))
     }
+    /// MusicBrainz search finished.
+    pub fn mb_results(&mut self, r: Result<Vec<Release>, String>) {
+        let Dialog::Tags(e) = self else { return };
+        e.busy = false;
+        match r {
+            Ok(list) if list.is_empty() => e.note = Some("Nothing found on MusicBrainz. Fix album / artist and try again.".into()),
+            Ok(mut list) => {
+                // Same song count first, then the oldest (usually the original).
+                let n = e.paths.len() as u32;
+                list.sort_by_key(|r| (r.tracks != n, r.date.is_empty(), r.date.clone()));
+                e.mb = Some((list, 0));
+                e.note = None;
+            }
+            Err(err) => e.note = Some(err),
+        }
+    }
+
+    /// A release was picked and loaded: fill the editor (nothing is saved yet).
+    pub fn mb_fill(&mut self, r: Result<Box<super::worker::MbFill>, String>) {
+        let Dialog::Tags(e) = self else { return };
+        e.busy = false;
+        let fill = match r {
+            Ok(f) => f,
+            Err(err) => return e.note = Some(err),
+        };
+        e.mb = None;
+        let rel = &fill.release;
+        let mut set = |i: usize, v: &str| {
+            if !v.is_empty() && e.values[i] != v {
+                e.values[i] = v.to_string();
+                e.touched[i] = true;
+            }
+        };
+        set(2, &rel.title);
+        set(3, &rel.artist);
+        set(4, &rel.year);
+        let matched = fill.matched.iter().filter(|m| m.is_some()).count();
+        if e.paths.len() == 1 {
+            if let Some(Some(k)) = fill.matched.first() {
+                let s = &rel.songs[*k];
+                set(0, &s.title);
+                set(1, &s.artist);
+                set(5, &s.no.to_string());
+                set(6, &if rel.discs > 1 { s.disc.to_string() } else { String::new() });
+            }
+        } else {
+            set(1, &rel.artist);
+            e.per_song = fill
+                .matched
+                .iter()
+                .map(|m| {
+                    let mut f: [Option<String>; 8] = Default::default();
+                    if let Some(k) = m {
+                        let s = &rel.songs[*k];
+                        f[0] = Some(s.title.clone());
+                        f[1] = Some(s.artist.clone());
+                        f[5] = Some(s.no.to_string());
+                        if rel.discs > 1 {
+                            f[6] = Some(s.disc.to_string());
+                        }
+                    }
+                    f
+                })
+                .collect();
+        }
+        if let Some(b) = &fill.cover {
+            let size = image::ImageReader::new(std::io::Cursor::new(b))
+                .with_guessed_format()
+                .ok()
+                .and_then(|r| r.into_dimensions().ok())
+                .map(|(w, h)| format!(" · {w}×{h}"))
+                .unwrap_or_default();
+            e.cover_data = Some((b.clone(), format!("from MusicBrainz{size}")));
+            e.cover.clear();
+            e.cover_remove = false;
+        }
+        let n = e.paths.len();
+        let cover = if fill.cover.is_some() { "cover found" } else { "no cover there" };
+        e.note = Some(if matched == n {
+            format!("All {n} songs matched · {cover} · check, enter saves")
+        } else if matched == 0 {
+            format!("Songs didn't match, only album tags filled · {cover}")
+        } else {
+            format!("{matched} of {n} songs matched · {cover} · enter saves")
+        });
+    }
+
     pub fn quit() -> Self {
         Dialog::Quit
     }
@@ -472,8 +576,30 @@ impl Dialog {
             Dialog::Tags(e) => {
                 let rows = e.rows();
                 let on_cover = rows[e.row] == COVER_ROW;
+                if let Some((list, cur)) = &mut e.mb {
+                    match k.code {
+                        _ if esc => e.mb = None,
+                        _ if e.busy => {}
+                        KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => {
+                            *cur = (*cur + 1).min(list.len() - 1);
+                            e.note = None;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') | KeyCode::BackTab => *cur = cur.saturating_sub(1),
+                        KeyCode::Enter => {
+                            let id = list[*cur].id.clone();
+                            e.busy = true;
+                            e.note = Some("Loading songs and cover…".into());
+                            app.send_job(Job::MbRelease { id, files: e.files.clone() });
+                        }
+                        _ => {}
+                    }
+                    return true;
+                }
                 if esc {
                     return false;
+                }
+                if e.busy {
+                    return true;
                 }
                 if down {
                     e.row = (e.row + 1) % rows.len();
@@ -488,14 +614,17 @@ impl Dialog {
                             return true;
                         }
                         CoverJob::Set(p)
+                    } else if let Some((b, _)) = e.cover_data.take() {
+                        CoverJob::Data(b)
                     } else {
                         CoverJob::Keep
                     };
                     let fields = e.changes();
-                    if fields.iter().all(Option::is_none) && matches!(cover, CoverJob::Keep) {
+                    let per_song = std::mem::take(&mut e.per_song);
+                    if fields.iter().all(Option::is_none) && matches!(cover, CoverJob::Keep) && per_song.is_empty() {
                         app.info("Nothing changed");
                     } else {
-                        app.send_job(Job::WriteTags { paths: std::mem::take(&mut e.paths), fields, cover });
+                        app.send_job(Job::WriteTags { paths: std::mem::take(&mut e.paths), fields, cover, per_song });
                     }
                     return false;
                 } else if ctrl && k.code == KeyCode::Char('f') {
@@ -521,7 +650,13 @@ impl Dialog {
                     } else {
                         format!("Filled {n} from the file name · check, then enter to save")
                     });
+                } else if ctrl && k.code == KeyCode::Char('b') {
+                    let artist = if e.values[3].trim().is_empty() { e.values[1].clone() } else { e.values[3].clone() };
+                    e.busy = true;
+                    e.note = Some("Searching MusicBrainz…".into());
+                    app.send_job(Job::MbSearch { artist, album: e.values[2].clone() });
                 } else if on_cover && ctrl && k.code == KeyCode::Char('x') {
+                    e.cover_data = None;
                     e.cover_remove = !e.cover_remove;
                     e.cover.clear();
                 } else {
@@ -530,6 +665,7 @@ impl Dialog {
                     if edit(v, &k) {
                         if i == COVER_ROW {
                             e.cover_remove = false;
+                            e.cover_data = None;
                         } else {
                             e.touched[i] = true;
                         }
@@ -598,6 +734,30 @@ impl Dialog {
                 put(b, field.x + 1, field.y, &format!("{shown}▏"), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
                 hints_row(b, inner, "enter ok · esc cancel", muted);
             }
+            Dialog::Tags(e) if e.mb.is_some() => {
+                let (list, cur) = e.mb.as_ref().expect("checked");
+                let h = (list.len() as u16 + 5).min(area.height.saturating_sub(4));
+                let inner = frame(f, app, 90, h, "MusicBrainz · pick the release");
+                let rows = inner.height.saturating_sub(3) as usize;
+                let start = cur.saturating_sub(rows.saturating_sub(1));
+                for (k, r) in list.iter().enumerate().skip(start).take(rows) {
+                    let y = inner.y + 1 + (k - start) as u16;
+                    let year: String = r.date.chars().take(4).collect();
+                    let extra = [year, r.country.clone(), format!("{} songs", r.tracks), r.format.clone()]
+                        .into_iter()
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" · ");
+                    sel_row(f, app, inner, y, "", k == *cur);
+                    let bg = if k == *cur { t.selection } else { t.dialog_bg };
+                    let ew = (extra.width() as u16).min(inner.width / 2);
+                    let ex = put_right(f.buffer_mut(), inner.x + inner.width - 2, y, &extra, ew, Style::default().fg(c(t.muted)).bg(c(bg)));
+                    let st = Style::default().fg(c(if k == *cur { t.selection_fg } else { t.fg })).bg(c(bg));
+                    put(f.buffer_mut(), inner.x + 3, y, &format!("{} — {}", r.title, r.artist), ex.saturating_sub(inner.x + 5), st);
+                }
+                let hint = e.note.clone().unwrap_or_else(|| "enter use this one · esc back".into());
+                hints_row(f.buffer_mut(), inner, &hint, muted);
+            }
             Dialog::Tags(e) => {
                 let rows = e.rows();
                 let title = if e.paths.len() == 1 { "Edit tags".to_string() } else { format!("Edit tags · {} songs", e.paths.len()) };
@@ -621,7 +781,7 @@ impl Dialog {
                     let dim = Style::default().fg(c(t.muted)).bg(c(bg));
                     let cursor = if sel { "▏" } else { "" };
                     let (label, changed) = if i == COVER_ROW {
-                        ("Cover", e.cover_remove || !e.cover.trim().is_empty())
+                        ("Cover", e.cover_remove || !e.cover.trim().is_empty() || e.cover_data.is_some())
                     } else {
                         (tagedit::FIELDS[i], e.touched[i] && (e.mixed[i] || e.values[i].trim() != e.orig[i]))
                     };
@@ -638,6 +798,8 @@ impl Dialog {
                                 fw.saturating_sub(1),
                                 Style::default().fg(c(t.warn)).bg(c(bg)),
                             );
+                        } else if let Some((_, label)) = e.cover.is_empty().then_some(()).and(e.cover_data.as_ref()) {
+                            put(b, fx + 1, y, &format!("{cursor}{label}"), fw.saturating_sub(1), Style::default().fg(c(t.good)).bg(c(bg)));
                         } else if e.cover.is_empty() {
                             let hint = if sel { format!("{cursor}{} · type a picture path", e.cover_now) } else { e.cover_now.clone() };
                             put(b, fx + 1, y, &hint, fw.saturating_sub(1), dim);
@@ -661,7 +823,7 @@ impl Dialog {
                     if on_cover {
                         "type a picture path (~ ok) · ctrl+x remove · enter save · esc cancel".into()
                     } else {
-                        "enter save · ctrl+f from file name · esc cancel".into()
+                        "enter save · ctrl+f from file name · ctrl+b MusicBrainz · esc cancel".into()
                     }
                 });
                 hints_row(b, inner, &hint, muted);

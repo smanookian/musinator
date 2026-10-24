@@ -1068,6 +1068,16 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::MbResults(r) => {
+                if let Some(d) = &mut self.dialog {
+                    d.mb_results(r);
+                }
+            }
+            Msg::MbFill(r) => {
+                if let Some(d) = &mut self.dialog {
+                    d.mb_fill(r);
+                }
+            }
             Msg::EditTags(info) => self.dialog = Some(Dialog::tags(*info)),
             Msg::TagsSaved { ok, failed, arts, songs } => {
                 self.edited.extend(songs);

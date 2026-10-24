@@ -18,7 +18,17 @@ pub enum CoverJob {
     Keep,
     /// Embed this picture; for many songs also save it as `cover.jpg`/`.png` in their folders.
     Set(std::path::PathBuf),
+    /// Picture bytes (from the Cover Art Archive).
+    Data(Vec<u8>),
     Remove,
+}
+
+/// A MusicBrainz release picked for the editor, matched to its files.
+pub struct MbFill {
+    pub release: crate::library::musicbrainz::Full,
+    /// For each file: index into `release.songs`.
+    pub matched: Vec<Option<usize>>,
+    pub cover: Option<Vec<u8>>,
 }
 
 /// What the tag editor needs to open.
@@ -61,6 +71,17 @@ pub enum Job {
         paths: Vec<std::path::PathBuf>,
         fields: [Option<String>; 8],
         cover: CoverJob,
+        /// Per-song fields (from MusicBrainz), on top of `fields`. Empty or one per path.
+        per_song: Vec<[Option<String>; 8]>,
+    },
+    MbSearch {
+        artist: String,
+        album: String,
+    },
+    MbRelease {
+        id: String,
+        /// (disc, track) of each file.
+        files: Vec<(u32, u32)>,
     },
     FetchLyrics {
         track: Arc<Track>,
@@ -107,6 +128,8 @@ pub enum Job {
 }
 
 pub enum Msg {
+    MbResults(Result<Vec<crate::library::musicbrainz::Release>, String>),
+    MbFill(Result<Box<MbFill>, String>),
     /// Tags read for the editor: file paths, each file's fields.
     EditTags(Box<EditInfo>),
     /// `arts`: pictures that changed (drop them from the caches).
@@ -244,11 +267,25 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                 then => send(Msg::Tracks { tracks, then }),
             }
         }
-        Job::WriteTags { paths, fields, cover } => {
+        Job::MbSearch { artist, album } => {
+            send(Msg::MbResults(crate::library::musicbrainz::search(&artist, &album).map_err(|e| format!("{e:#}"))));
+        }
+        Job::MbRelease { id, files } => {
+            use crate::library::musicbrainz as mb;
+            let r = mb::release(&id).map(|release| {
+                let matched = mb::match_songs(&files, &release.songs);
+                // No cover there is fine; a failed download too (tags still help).
+                let cover = mb::cover(&id).ok().flatten();
+                Box::new(MbFill { release, matched, cover })
+            });
+            send(Msg::MbFill(r.map_err(|e| format!("{e:#}"))));
+        }
+        Job::WriteTags { paths, fields, cover, per_song } => {
             use crate::library::tagedit::{self, CoverEdit};
             let edit = match &cover {
                 CoverJob::Keep => CoverEdit::Keep,
                 CoverJob::Remove => CoverEdit::Remove,
+                CoverJob::Data(b) => CoverEdit::Set(b.clone()),
                 CoverJob::Set(p) => match tagedit::load_cover(p) {
                     Ok(b) => CoverEdit::Set(b),
                     Err(e) => return send(err(e)),
@@ -257,8 +294,16 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
             let mut ok = 0;
             let mut failed = Vec::new();
             let mut arts = Vec::new();
-            for p in &paths {
-                match tagedit::write(p, &fields, &edit) {
+            for (k, p) in paths.iter().enumerate() {
+                let mut f = fields.clone();
+                if let Some(own) = per_song.get(k) {
+                    for (i, v) in own.iter().enumerate() {
+                        if v.is_some() {
+                            f[i] = v.clone();
+                        }
+                    }
+                }
+                match tagedit::write(p, &f, &edit) {
                     Ok(()) => ok += 1,
                     Err(e) => failed.push(format!("{}: {e:#}", p.file_name().unwrap_or_default().to_string_lossy())),
                 }
@@ -276,7 +321,7 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                     CoverJob::Set(p) => Some(p.as_path()),
                     _ => None,
                 };
-                for d in dirs.into_iter().filter(|d| crate::library::folder_cover(d).as_deref() != src) {
+                for d in dirs.into_iter().filter(|d| src.is_none() || crate::library::folder_cover(d).as_deref() != src) {
                     match tagedit::save_folder_cover(d, b) {
                         Ok(f) => {
                             arts.push(crate::model::ArtRef { source: crate::source::local::ID.into(), id: format!("file:{}", f.display()) })
