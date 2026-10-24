@@ -131,6 +131,8 @@ pub struct App {
     /// Per-song lyrics offset for the playing song (ms, positive = later).
     pub lyrics_offset: i64,
     pub sleep: Option<Sleep>,
+    /// When an online lyrics lookup started (shows a spinner).
+    pub lyrics_lookup: Option<Instant>,
     /// Ratings changed this session (lists may still hold old track copies).
     pub ratings: std::collections::HashMap<TrackRef, Option<u8>>,
     /// (bg, fg) last sent to the terminal with OSC 11/10.
@@ -725,7 +727,10 @@ impl App {
                     self.info("This song already has synced lyrics");
                     return;
                 }
-                self.info("Looking up lyrics on lrclib.net…");
+                if self.lyrics_lookup.is_some() {
+                    return;
+                }
+                self.lyrics_lookup = Some(Instant::now());
                 self.worker.send(Job::FetchLyrics { track: t, next_to_song: self.cfg.save_lyrics_next });
             }
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
@@ -1021,6 +1026,7 @@ impl App {
                 self.lyrics = lyrics.map(|l| (track, l));
             }
             Msg::Restored { session, tracks } => self.restore(session, tracks),
+            Msg::LookupDone => self.lyrics_lookup = None,
             Msg::Rated => {
                 if let Some(node) = self.list().map(|v| v.node.clone()).filter(|n| n.starts_with("smart:")) {
                     self.reload_lists_matching(&node);
@@ -1145,6 +1151,9 @@ impl App {
             }
         } else if self.viz.bars.iter().any(|b| *b > 0.0) && self.viz_area.area() > 0 {
             want(Duration::from_millis(33));
+        }
+        if self.lyrics_lookup.is_some() {
+            want(Duration::from_millis(100));
         }
         if let Some(Sleep::At(t)) = self.sleep {
             want(t.saturating_duration_since(Instant::now()).max(Duration::from_millis(50)).min(Duration::from_secs(30)));
@@ -1340,6 +1349,7 @@ pub fn run(cfg: Config) -> Result<()> {
         preview_theme: None,
         lyrics_offset: 0,
         sleep: None,
+        lyrics_lookup: None,
         ratings: Default::default(),
         term_colors: None,
         kitty_ok,
@@ -1567,5 +1577,14 @@ impl App {
             let _ = write!(out, "\x1b]111\x07\x1b]110\x07");
             let _ = out.flush();
         }
+    }
+}
+
+impl App {
+    /// "⠋ Looking up lyrics…" while an online lookup runs.
+    pub fn lookup_label(&self) -> Option<String> {
+        const SPIN: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+        let t = self.lyrics_lookup?;
+        Some(format!("{} Looking up lyrics", SPIN[(t.elapsed().as_millis() / 100) as usize % SPIN.len()]))
     }
 }

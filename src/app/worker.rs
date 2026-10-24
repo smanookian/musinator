@@ -101,6 +101,8 @@ pub enum Msg {
         tracks: Vec<Arc<Track>>,
     },
     Rated,
+    /// An online lyrics lookup finished (found or not).
+    LookupDone,
     Tracks {
         tracks: Vec<Arc<Track>>,
         then: Then,
@@ -209,6 +211,7 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
                 Ok(None) => send(Msg::Info("No lyrics found online for this song".into())),
                 Err(e) => send(Msg::Error(format!("Lyrics lookup failed: {e:#}"))),
             }
+            send(Msg::LookupDone);
         }
         Job::Rate { track, rating } => match db::set_rating(&local.conn(), &track.source, &track.id, rating) {
             Ok(()) => send(Msg::Rated),

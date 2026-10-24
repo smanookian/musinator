@@ -744,7 +744,10 @@ fn big_panel(f: &mut Frame, app: &mut App, area: Rect) {
     if app.cfg.lyrics && y < lyr_bottom {
         let avail = (lyr_bottom - y) as usize;
         if app.current_lyric().is_none() {
-            let hint = format!("No lyrics · {} looks them up online", app.keys.hint(Action::FetchLyrics));
+            let hint = match app.lookup_label() {
+                Some(l) => format!("{l} online…"),
+                None => format!("No lyrics · {} looks them up online", app.keys.hint(Action::FetchLyrics)),
+            };
             put(buf, x, y, &hint, w, Style::default().fg(c(t.muted)));
         }
         if let Some((l, cur)) = app.current_lyric() {
@@ -871,7 +874,7 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
     fill(buf, r, t.status_bar);
     let snap = app.now();
     let up = app.engine.queue.lock().up_next().len();
-    let left = if let Some((msg, err, _)) = &app.status {
+    let left = if let Some((msg, err, _)) = app.status.as_ref().filter(|(_, e, _)| *e || app.lyrics_lookup.is_none()) {
         (format!("  {msg}"), if *err { t.error } else { t.fg })
     } else {
         let mut s = format!("♪ {} · {up} in queue · vol {}%", snap.state.label(), (snap.volume * 100.0).round());
@@ -882,6 +885,9 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
         }
         if let Some(l) = app.sleep_label() {
             s.push_str(&format!(" · {l}"));
+        }
+        if let Some(l) = app.lookup_label() {
+            s.push_str(&format!(" · {l}…"));
         }
         (format!(" {s}"), t.fg)
     };
