@@ -2,7 +2,7 @@
 //!
 //! Browse node ids: `artists`, `artist:<name>`, `albums`, `album:<key>`, `tracks`,
 //! `genres`, `genre:<name>`, `folders`, `folder:<path>`, `playlist:<id>`,
-//! `smart:most`, `smart:never`, `smart:week`.
+//! `smart:most`, `smart:never`, `smart:week`, `smart:liked`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -44,7 +44,6 @@ impl LocalSource {
                     None => artist,
                 },
                 count: Some(r.get::<_, i64>(4)? as u64),
-                year,
                 art: r.get::<_, Option<String>>(5)?.map(|id| ArtRef { source: self.id.clone(), id }),
             })
         })?;
@@ -74,7 +73,6 @@ impl LocalSource {
                     title: name,
                     subtitle: String::new(),
                     count: None,
-                    year: None,
                     art: None,
                 })
             })
@@ -130,7 +128,6 @@ impl Source for LocalSource {
                         title: r.get(0)?,
                         subtitle: format!("{albums} album{}", if albums == 1 { "" } else { "s" }),
                         count: Some(r.get::<_, i64>(2)? as u64),
-                        year: None,
                         art: None,
                     }))
                 })?;
@@ -149,7 +146,6 @@ impl Source for LocalSource {
                         title: r.get(0)?,
                         subtitle: String::new(),
                         count: Some(r.get::<_, i64>(1)? as u64),
-                        year: None,
                         art: None,
                     }))
                 })?;
@@ -167,7 +163,6 @@ impl Source for LocalSource {
                         title: f.to_string_lossy().into_owned(),
                         subtitle: String::new(),
                         count: None,
-                        year: None,
                         art: None,
                     })
                 })
@@ -183,6 +178,11 @@ impl Source for LocalSource {
                 "never" => self.tracks(
                     &c,
                     "LEFT JOIN stats s ON s.source = 'local' AND s.id = t.path WHERE COALESCE(s.play_count, 0) = 0 ORDER BY lower(t.artist), lower(t.album), t.disc_no, t.track_no",
+                    [],
+                )?,
+                "liked" => self.tracks(
+                    &c,
+                    "JOIN stats s ON s.source = 'local' AND s.id = t.path WHERE s.liked = 1 ORDER BY lower(t.artist), lower(t.album), t.disc_no, t.track_no",
                     [],
                 )?,
                 "week" => self.tracks(&c, "WHERE t.added_at >= ?1 ORDER BY t.added_at DESC, lower(t.album), t.disc_no, t.track_no", [week])?,
@@ -210,7 +210,6 @@ impl Source for LocalSource {
                     title: r.get(0)?,
                     subtitle: format!("{} albums", r.get::<_, i64>(1)?),
                     count: None,
-                    year: None,
                     art: None,
                 })
             })?
@@ -239,7 +238,6 @@ impl Source for LocalSource {
                 title: p.name,
                 subtitle: String::new(),
                 count: Some(p.count),
-                year: None,
                 art: None,
             })
             .collect();

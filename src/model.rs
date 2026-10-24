@@ -15,6 +15,7 @@ pub struct TrackRef {
 }
 
 impl TrackRef {
+    #[cfg(test)]
     pub fn new(source: &SourceId, id: impl Into<String>) -> Self {
         Self { source: source.clone(), id: id.into() }
     }
@@ -35,7 +36,7 @@ pub struct AudioFormat {
 
 impl AudioFormat {
     pub fn lossless(&self) -> bool {
-        matches!(self.codec.as_str(), "FLAC" | "ALAC" | "PCM" | "WAV")
+        matches!(self.codec.as_str(), "FLAC" | "ALAC" | "PCM" | "WAV" | "AIFF")
     }
 
     /// "FLAC 24/96", "MP3 320k", "Opus 128k", "AAC 44.1k".
@@ -87,8 +88,6 @@ pub struct ArtRef {
 #[derive(Clone, Debug, Default)]
 pub struct Track {
     pub r: Option<TrackRef>,
-    /// Row id in the library database, if the track is in it.
-    pub db_id: Option<i64>,
     pub title: String,
     pub artist: String,
     pub album: String,
@@ -97,7 +96,6 @@ pub struct Track {
     pub track_no: Option<u32>,
     pub track_total: Option<u32>,
     pub disc_no: Option<u32>,
-    pub genre: String,
     pub duration_ms: Option<u64>,
     pub format: Option<AudioFormat>,
     pub gain: Gain,

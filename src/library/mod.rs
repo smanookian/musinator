@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::*};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use crossbeam_channel as cb;
@@ -20,7 +20,7 @@ use rayon::prelude::*;
 #[derive(Clone, Debug)]
 pub enum LibEvent {
     Progress { done: usize, total: usize },
-    Done { added: usize, updated: usize, removed: usize, total: usize, secs: f64 },
+    Done { added: usize, removed: usize, total: usize },
     Loudness { done: usize, total: usize },
     Error(String),
 }
@@ -68,10 +68,6 @@ impl Library {
         self.scan();
     }
 
-    pub fn is_scanning(&self) -> bool {
-        self.busy.load(Acquire)
-    }
-
     /// Start a background scan (or queue one if a scan is running).
     pub fn scan(self: &Arc<Self>) {
         if self.busy.swap(true, AcqRel) {
@@ -108,7 +104,6 @@ impl Library {
     }
 
     fn scan_once(&self) -> Result<()> {
-        let t0 = Instant::now();
         let mut conn = db::open(&self.db_path)?;
         let folders = self.folders();
         // 1. Walk.
@@ -149,7 +144,6 @@ impl Library {
             .collect();
         let total = todo.len();
         let mut added = 0;
-        let mut updated = 0;
         let _ = self.tx.send(LibEvent::Progress { done: 0, total });
         // 3. Read tags in parallel, write in batches.
         let pool = Self::pool();
@@ -170,7 +164,7 @@ impl Library {
                             0
                         };
                         if known.contains_key(row.path.as_str()) {
-                            updated += 1;
+                            // updated in place
                         } else {
                             added += 1;
                         }
@@ -191,7 +185,7 @@ impl Library {
                 }
             }
             tx.commit()?;
-            let _ = self.tx.send(LibEvent::Progress { done: added + updated, total });
+            let _ = self.tx.send(LibEvent::Progress { done: added.min(total), total });
         }
         // 4. Remove files that are gone.
         let gone: Vec<&String> = known.keys().filter(|k| !seen.contains(*k)).collect();
@@ -206,7 +200,7 @@ impl Library {
             db::rebuild_albums(&conn)?;
         }
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?;
-        let _ = self.tx.send(LibEvent::Done { added, updated, removed: gone.len(), total: count as usize, secs: t0.elapsed().as_secs_f64() });
+        let _ = self.tx.send(LibEvent::Done { added, removed: gone.len(), total: count as usize });
         Ok(())
     }
 
@@ -241,6 +235,10 @@ impl Library {
             let _ = self.tx.send(LibEvent::Loudness { done, total });
         }
         Ok(())
+    }
+
+    pub fn unwatch(&self) {
+        *self.watcher.lock() = None;
     }
 
     /// Watch music folders; rescan 2 s after changes stop.

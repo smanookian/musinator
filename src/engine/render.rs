@@ -62,6 +62,10 @@ impl Tap {
         self.buf[p % Self::LEN].store(v.to_bits(), Relaxed);
         self.pos.store(p.wrapping_add(1), Release);
     }
+    #[cfg(test)]
+    pub fn push_for_test(&self, v: f32) {
+        self.push(v);
+    }
     /// Copy the newest `out.len()` samples (oldest first).
     pub fn snapshot(&self, out: &mut [f32]) {
         let end = self.pos.load(Acquire);
@@ -91,6 +95,7 @@ impl Renderer {
     }
 
     /// Samples waiting in the ring.
+    #[cfg(test)]
     pub fn available(&self) -> usize {
         self.cons.slots()
     }
@@ -152,7 +157,8 @@ impl Renderer {
                 let v = s * self.gain;
                 out[i] = v;
                 if tap_on {
-                    acc += v;
+                    // Before the user volume: the visualizer follows the music, not the knob.
+                    acc += s;
                     if i % channels == channels - 1 {
                         self.tap.push(acc / channels as f32);
                         acc = 0.0;

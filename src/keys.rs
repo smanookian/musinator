@@ -48,6 +48,9 @@ pub enum Action {
     PaneShrink,
     PaneGrow,
     Rescan,
+    RenamePlaylist,
+    ExportPlaylist,
+    ClearQueue,
     Quit,
 }
 
@@ -84,10 +87,13 @@ actions! {
     MoveUp "move_up" "Queue" "Move item up" ["K"];
     Remove "remove" "Queue" "Remove item" ["d", "delete"];
     Queue "queue" "Queue" "Show queue" ["q"];
+    ClearQueue "clear_queue" "Queue" "Clear queue" ["X"];
     Search "search" "Find" "Search everything" ["/"];
     Like "like" "Library" "Like / unlike" ["L"];
     AddToPlaylist "add_to_playlist" "Library" "Add to playlist" ["P"];
     NewPlaylist "new_playlist" "Library" "New playlist" ["N"];
+    RenamePlaylist "rename_playlist" "Library" "Rename playlist" ["R"];
+    ExportPlaylist "export_playlist" "Library" "Export playlist (.m3u8)" ["E"];
     GridView "grid" "Library" "Album grid on / off" ["o"];
     Rescan "rescan" "Library" "Rescan music folders" ["ctrl+r"];
     ToggleScreen "toggle_screen" "Screens" "Library ↔ Now Playing" ["z"];

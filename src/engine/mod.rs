@@ -85,7 +85,7 @@ pub enum Event {
     Track(Option<Arc<Track>>),
     State(PlayState),
     Seeked(Duration),
-    Volume(f32),
+    Volume,
     Error(String),
     /// A track stopped being current; `listened` is real listening time.
     Finished { track: Arc<Track>, listened: Duration },
@@ -187,6 +187,39 @@ impl Engine {
 
     /// Position in the audible track.
     pub fn position(&self) -> Duration {
+        self.view().position()
+    }
+
+    /// Rate the PipeWire graph runs at (0 = not known yet).
+    pub fn output_rate(&self) -> u32 {
+        self.shared.graph_rate.load(Relaxed)
+    }
+
+    /// A read-only handle for other threads (MPRIS, IPC).
+    pub fn view(&self) -> EngineView {
+        EngineView { snap: self.snap.clone(), audible: self.audible.clone(), shared: self.shared.clone(), pub_queue: self.queue.clone() }
+    }
+}
+
+#[derive(Clone)]
+pub struct EngineView {
+    snap: Arc<Mutex<Snapshot>>,
+    audible: Arc<Mutex<Audible>>,
+    shared: Arc<Shared>,
+    pub_queue: Arc<Mutex<Queue>>,
+}
+
+impl EngineView {
+    pub fn snapshot(&self) -> Snapshot {
+        self.snap.lock().clone()
+    }
+    pub fn queue(&self) -> &Arc<Mutex<Queue>> {
+        &self.pub_queue
+    }
+    pub fn output_rate(&self) -> u32 {
+        self.shared.graph_rate.load(Relaxed)
+    }
+    pub fn position(&self) -> Duration {
         let a = *self.audible.lock();
         if a.rate == 0 || a.channels == 0 {
             return Duration::ZERO;
@@ -194,11 +227,6 @@ impl Engine {
         let consumed = self.shared.consumed.load(Acquire);
         let played = consumed.saturating_sub(a.at) / a.channels as u64;
         Duration::from_secs_f64((a.pos_frames + played) as f64 / a.rate as f64)
-    }
-
-    /// Rate the PipeWire graph runs at (0 = not known yet).
-    pub fn output_rate(&self) -> u32 {
-        self.shared.graph_rate.load(Relaxed)
     }
 }
 
@@ -365,7 +393,7 @@ impl Worker {
                 let v = v.clamp(0.0, 1.0);
                 self.shared.set_volume(gain::volume_curve(v));
                 self.snap.lock().volume = v;
-                self.emit(Event::Volume(v));
+                self.emit(Event::Volume);
             }
             Cmd::Gain(g) => {
                 self.gain = g;
@@ -636,7 +664,17 @@ impl Worker {
             }
             let Some(d) = self.dec.as_mut() else { return };
             self.scratch.clear();
-            match d.stream.read(&mut self.scratch) {
+            let res = d.stream.read(&mut self.scratch);
+            // Live streams (radio, v2) report song changes inside the stream.
+            if let Some(mut t) = d.stream.meta_update() {
+                t.r = d.track.r.clone();
+                let t = Arc::new(t);
+                d.track = t.clone();
+                self.snap.lock().track = Some(t.clone());
+                self.emit(Event::Track(Some(t)));
+            }
+            let Some(d) = self.dec.as_mut() else { return };
+            match res {
                 Ok(true) => {
                     if d.amp != 1.0 {
                         let a = d.amp;

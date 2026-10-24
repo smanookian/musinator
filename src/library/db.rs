@@ -151,7 +151,6 @@ pub fn track_from_row(src: &SourceId, r: &Row) -> rusqlite::Result<Track> {
     let origin: i64 = r.get(21)?;
     let art = art.map(|a| ArtRef { source: src.clone(), id: if a == "embedded" { format!("embedded:{path}") } else { format!("file:{a}") } });
     Ok(Track {
-        db_id: Some(r.get(0)?),
         title: r.get(2)?,
         artist: r.get(3)?,
         album_artist: r.get(4)?,
@@ -160,7 +159,6 @@ pub fn track_from_row(src: &SourceId, r: &Row) -> rusqlite::Result<Track> {
         track_no: r.get(7)?,
         track_total: r.get(8)?,
         disc_no: r.get(9)?,
-        genre: r.get(10)?,
         duration_ms: Some(r.get::<_, i64>(11)? as u64),
         format: Some(AudioFormat {
             codec: r.get(12)?,

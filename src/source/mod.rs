@@ -40,13 +40,11 @@ pub type NodeId = String;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeKind {
-    Section,
     Artist,
     Album,
     Genre,
     Folder,
     Playlist,
-    Smart,
 }
 
 /// A browsable entry that is not a track.
@@ -58,7 +56,6 @@ pub struct Node {
     /// Second line / right-hand info, e.g. "Neon Harbor · 2024".
     pub subtitle: String,
     pub count: Option<u64>,
-    pub year: Option<i32>,
     pub art: Option<ArtRef>,
 }
 

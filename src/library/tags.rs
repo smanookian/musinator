@@ -56,7 +56,8 @@ pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
         FileType::Mpeg => "MP3",
         FileType::Opus => "Opus",
         FileType::Vorbis => "Vorbis",
-        FileType::Wav | FileType::Aiff => "PCM",
+        FileType::Wav => "WAV",
+        FileType::Aiff => "AIFF",
         FileType::Mp4 => {
             match lofty::mp4::Mp4File::read_from(&mut std::fs::File::open(path)?, Default::default()).ok().and_then(|m| m.properties().codec()) {
                 Some(lofty::mp4::Mp4Codec::ALAC) => "ALAC",
@@ -68,7 +69,7 @@ pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
         _ => "PCM",
     }
     .to_string();
-    let lossless = matches!(codec.as_str(), "FLAC" | "ALAC" | "PCM");
+    let lossless = matches!(codec.as_str(), "FLAC" | "ALAC" | "PCM" | "WAV" | "AIFF");
     let mut r = TrackRow {
         path: path.to_string_lossy().into_owned(),
         folder: path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),

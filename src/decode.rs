@@ -76,7 +76,16 @@ impl FileStream {
             .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
             .with_context(|| format!("unsupported file {}", path.display()))?;
         let gapless = if mp4 { mp4_gapless(path) } else { None };
-        Self::from_reader(reader, size, gapless)
+        let mut s = Self::from_reader(reader, size, gapless)?;
+        if s.info.format.codec == "PCM" {
+            s.info.format.codec = match ext.as_str() {
+                "wav" | "wave" => "WAV",
+                "aif" | "aiff" => "AIFF",
+                _ => "PCM",
+            }
+            .into();
+        }
+        Ok(s)
     }
 
     fn from_reader(reader: Box<dyn FormatReader>, size: u64, mp4: Option<Mp4Gapless>) -> Result<Self> {
