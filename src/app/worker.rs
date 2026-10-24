@@ -9,6 +9,7 @@ use crossbeam_channel as cb;
 use crate::library::{db, m3u8};
 use crate::model::{Track, TrackRef};
 use crate::source::local::LocalSource;
+use crate::source::radio::RadioSource;
 use crate::source::{Item, Lyrics, Page, SearchHits, Source};
 
 /// What to do with resolved tracks.
@@ -128,6 +129,8 @@ pub enum Job {
 }
 
 pub enum Msg {
+    /// A station became (true) or stopped being a favorite.
+    RadioFav(bool),
     MbResults(Result<Vec<crate::library::musicbrainz::Release>, String>),
     MbFill(Result<Box<MbFill>, String>),
     /// Tags read for the editor: file paths, each file's fields.
@@ -177,7 +180,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn start(local: Arc<LocalSource>, out: cb::Sender<Msg>) -> Self {
+    pub fn start(local: Arc<LocalSource>, radio: Arc<RadioSource>, out: cb::Sender<Msg>) -> Self {
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
             .name("ui-worker".into())
@@ -191,7 +194,7 @@ impl Worker {
                         if matches!(j, Job::Search { .. }) && Some(i) != last_search {
                             continue;
                         }
-                        run(&local, j, &out);
+                        run(&local, &radio, j, &out);
                     }
                 }
             })
@@ -204,24 +207,29 @@ impl Worker {
     }
 }
 
-fn tracks_of(local: &LocalSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
-    let Ok(items) = local.children(node, Page::ALL) else { return };
+/// Children of a list node, from the source it belongs to.
+fn children(local: &LocalSource, radio: &RadioSource, node: &str) -> anyhow::Result<Vec<Item>> {
+    if node.starts_with("radio:") { radio.children(node, Page::ALL) } else { local.children(node, Page::ALL) }
+}
+
+fn tracks_of(local: &LocalSource, radio: &RadioSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
+    let Ok(items) = children(local, radio, node) else { return };
     for it in items {
         match it {
             Item::Track(t) => out.push(t),
-            Item::Node(n) if depth > 0 => tracks_of(local, &n.id, depth - 1, out),
+            Item::Node(n) if depth > 0 => tracks_of(local, radio, &n.id, depth - 1, out),
             Item::Node(_) => {}
         }
     }
 }
 
-fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
+fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>) {
     let send = |m: Msg| {
         let _ = out.send(m);
     };
     let err = |e: anyhow::Error| Msg::Error(format!("{e:#}"));
     match job {
-        Job::Children { seq, node } => send(Msg::Children { seq, items: local.children(&node, Page::ALL).map_err(|e| format!("{e:#}")) }),
+        Job::Children { seq, node } => send(Msg::Children { seq, items: children(local, radio, &node).map_err(|e| format!("{e:#}")) }),
         Job::Search { seq, query } => send(Msg::Search { seq, hits: local.search(&query, 50).unwrap_or_default() }),
         Job::Lyrics { track } => {
             let lyrics = local.lyrics(&track).ok().flatten();
@@ -230,7 +238,7 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
         }
         Job::Tracks { nodes, mut tracks, then } => {
             for n in nodes {
-                tracks_of(local, &n, 3, &mut tracks);
+                tracks_of(local, radio, &n, 3, &mut tracks);
             }
             match then {
                 Then::AddToPlaylist(id) => {
@@ -373,14 +381,26 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
             let tracks: Vec<Arc<Track>> = session
                 .items
                 .iter()
-                .filter(|i| std::path::Path::new(&i.path).exists())
-                .map(|i| {
+                .filter_map(|i| {
+                    if i.source.as_deref() == Some(crate::source::radio::ID) {
+                        let r = TrackRef { source: radio.id().clone(), id: i.path.clone() };
+                        // Only stations we still know (title shows); others are dropped.
+                        return radio.track(&r).ok().filter(|t| !t.title.is_empty()).map(Arc::new);
+                    }
+                    if i.source.is_some() || !std::path::Path::new(&i.path).exists() {
+                        return None;
+                    }
                     let r = TrackRef { source: src.clone(), id: i.path.clone() };
-                    Arc::new(local.track(&r).unwrap_or_else(|_| Track { r: Some(r), ..Default::default() }))
+                    Some(Arc::new(local.track(&r).unwrap_or_else(|_| Track { r: Some(r), ..Default::default() })))
                 })
                 .collect();
             send(Msg::Restored { session, tracks });
         }
+        // Radio: "like" means favorite station.
+        Job::Like(r) if &*r.source == crate::source::radio::ID => match radio.toggle_fav(&r.id) {
+            Ok(on) => send(Msg::RadioFav(on)),
+            Err(e) => send(err(e)),
+        },
         Job::Like(r) => match db::toggle_like(&local.conn(), &r.source, &r.id) {
             Ok(on) => send(Msg::Liked(on)),
             Err(e) => send(err(e)),
@@ -388,7 +408,7 @@ fn run(local: &LocalSource, job: Job, out: &cb::Sender<Msg>) {
         Job::Playlists => send(Msg::Playlists(db::playlists(&local.conn()).unwrap_or_default())),
         Job::NewPlaylist { name, nodes, mut tracks } => {
             for n in nodes {
-                tracks_of(local, &n, 3, &mut tracks);
+                tracks_of(local, radio, &n, 3, &mut tracks);
             }
             let res = (|| {
                 let mut c = local.conn();

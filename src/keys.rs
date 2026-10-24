@@ -58,6 +58,7 @@ pub enum Action {
     FetchLyrics,
     FullLyrics,
     MiniMode,
+    OpenVideo,
     LyricsLater,
     Rate1,
     Rate2,
@@ -123,6 +124,7 @@ actions! {
     Lyrics "lyrics" "Screens" "Lyrics on / off" ["l"];
     Visualizer "visualizer" "Screens" "Visualizer on / off" ["v"];
     MiniMode "mini_mode" "Screens" "Mini mode (3 lines)" ["m"];
+    OpenVideo "open_video" "Screens" "Watch video in mpv" ["V"];
     FullLyrics "full_lyrics" "Screens" "Full-screen lyrics" ["f"];
     FetchLyrics "fetch_lyrics" "Screens" "Find lyrics online (LRCLIB)" ["ctrl+l"];
     LyricsEarlier "lyrics_earlier" "Screens" "Lyrics 0.5 s earlier" ["["];

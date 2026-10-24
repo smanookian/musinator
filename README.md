@@ -13,6 +13,7 @@ A modern-looking music player for the terminal. Linux and Omarchy first.
 - **Real format.** The audio line shows codec, bit depth and rate, e.g. `FLAC 24/96 → 48 kHz · gapless · RG −1.6 dB`. `→ 48 kHz` means PipeWire resamples. `bit-perfect` means it does not.
 - **Real album art** on Kitty and Ghostty. Half-blocks in other terminals.
 - Visualizer from the real audio, synced lyrics (`.lrc`, embedded, or looked up on [LRCLIB](https://lrclib.net) when you press `ctrl+l`; found lyrics are cached, or saved next to the song if you turn that on in Settings → Library), playlists (`.m3u8` import/export), search, smart lists.
+- Internet radio from [radio-browser.info](https://www.radio-browser.info) (free, no account): Popular, search by name, genre or country, and your Favorites (`L` on a station). Shows the song on air. Musinator only asks radio-browser.info when you open these lists.
 - 22 themes plus **Match Omarchy**, which follows your Omarchy theme live. Every theme passes a contrast test.
 - Media keys and `playerctl` (MPRIS). A module for the Omarchy bar or Waybar.
 - Every setting is in the app. Every key can be changed.
@@ -84,6 +85,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
 | `e` | edit tags of the song, or of every song in an album / folder. `ctrl+f` fills tags from the file and folder name. **Cover:** type a picture path (JPEG/PNG kept as is, other formats become JPEG); it goes inside every song, and for an album also as `cover.jpg` in the folder. `ctrl+x` removes it. **`ctrl+b`** looks the album up on [MusicBrainz](https://musicbrainz.org): pick the release, and it fills titles, artist, album, year, track and disc numbers, plus the front cover from the [Cover Art Archive](https://coverartarchive.org). Only artist and album names are sent, and only when you press it. Nothing is saved until you press `enter`. Musinator writes a copy first, then replaces the file. |
 | `ctrl+e` | equalizer: 10 bands with a live curve, presets (Rock, Pop, Jazz, …) or your own; `space` on/off. Boosts lower the overall level so nothing distorts. |
+| `V` | watch a video file (`mp4`, `mkv`, `webm`, …) in [mpv](https://mpv.io) from the same spot; Musinator pauses |
 | `m` | mini mode: 3 lines for a small window (turns on by itself when the window is small) |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |

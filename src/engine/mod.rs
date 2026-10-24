@@ -472,6 +472,19 @@ impl Worker {
     }
 
     fn play(&mut self) {
+        // Live radio: "pause" works like stop. Reconnect, so you hear what is on air
+        // now and not minutes-old buffered audio.
+        let live = self.dec.as_ref().is_some_and(|d| {
+            d.track.r.as_ref().and_then(|r| self.sources.get(&r.source).ok()).is_some_and(|s| s.caps().contains(crate::source::Caps::LIVE))
+        });
+        let cur = self.queue.lock().current_id();
+        if self.state == PlayState::Paused
+            && live
+            && let Some(id) = cur
+        {
+            self.start_item(id, Duration::ZERO);
+            return;
+        }
         match self.state {
             PlayState::Playing => {}
             PlayState::Paused => {

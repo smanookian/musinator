@@ -181,6 +181,49 @@ impl App {
         self.lists.last_mut()
     }
 
+    /// Open the selected (or playing) video file in mpv at the right spot and pause here.
+    fn open_video(&mut self) {
+        const VIDEO: &[&str] = &["mp4", "m4v", "mkv", "webm", "mov", "avi"];
+        let is_video = |t: &Track| {
+            t.r.as_ref().is_some_and(|r| {
+                &*r.source == crate::source::local::ID
+                    && std::path::Path::new(&r.id)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .is_some_and(|e| VIDEO.contains(&e.to_ascii_lowercase().as_str()))
+            })
+        };
+        let now = self.now();
+        let selected = self.targets().and_then(|(_, t, _)| t.into_iter().next()).filter(|t| is_video(t));
+        let Some(t) = selected.or(now.track.clone().filter(|t| is_video(t))) else {
+            return self.info("Not a video file");
+        };
+        let playing_it = now.track.as_ref().is_some_and(|c| c.r == t.r);
+        let start = if playing_it { self.engine.position().as_secs_f64() } else { 0.0 };
+        let path = t.tref().id.clone();
+        let spawned = std::process::Command::new("mpv")
+            .arg("--force-window=yes")
+            .arg(format!("--start={start:.1}"))
+            .arg("--")
+            .arg(&path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        match spawned {
+            Ok(mut child) => {
+                // Reap it in the background so it never lingers as a zombie.
+                std::thread::spawn(move || child.wait());
+                if now.state == PlayState::Playing {
+                    self.engine.send(Cmd::Toggle);
+                }
+                self.info(format!("Playing video in mpv: {}", t.display_title()));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => self.error("mpv is not installed (sudo pacman -S mpv)"),
+            Err(e) => self.error(format!("Can't start mpv: {e}")),
+        }
+    }
+
     /// The equalizer changes the sound (on and not flat).
     pub fn eq_active(&self) -> bool {
         self.cfg.eq_on && self.cfg.eq_bands.iter().any(|g| g.abs() > 0.01)
@@ -276,6 +319,13 @@ impl App {
             s.push(Side::Playlist { id: p.id, name: p.name.clone(), count: p.count });
         }
         s.push(Side::Blank);
+        s.push(Side::Header("Radio"));
+        for (l, n) in
+            [("Favorites", crate::source::radio::FAVORITES), ("Popular", crate::source::radio::POPULAR), ("Find a station…", RADIO_FIND)]
+        {
+            s.push(Side::Node { label: l.into(), node: n.into() });
+        }
+        s.push(Side::Blank);
         s.push(Side::Header("Smart"));
         for (l, n) in [
             ("Most played", "smart:most"),
@@ -324,6 +374,12 @@ impl App {
                 v.loading = false;
                 v
             }
+            // Searching needs typing: show a hint until enter is pressed.
+            Side::Node { node, .. } if node == RADIO_FIND => {
+                let mut v = ListView::new("Find a station".into(), RADIO_FIND.into(), ListKind::Node, seq);
+                v.loading = false;
+                v
+            }
             Side::Node { label, node } => ListView::new(label, node, ListKind::Node, seq),
             Side::Playlist { id, name, .. } => ListView::new(name, format!("playlist:{id}"), ListKind::Node, seq),
             _ => return,
@@ -331,7 +387,7 @@ impl App {
         let node = view.node.clone();
         let kind = view.kind;
         self.lists = vec![view];
-        if kind == ListKind::Node && !node.is_empty() {
+        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND {
             self.worker.send(Job::Children { seq, node });
         }
         if kind == ListKind::Queue {
@@ -525,6 +581,10 @@ impl App {
         match (self.screen, self.focus) {
             (Screen::Library, Focus::Side) => match self.selected_side() {
                 Some(Side::NowPlaying) if self.now().track.is_some() => self.screen = Screen::NowPlaying,
+                Some(Side::Node { node, .. }) if node == RADIO_FIND => {
+                    self.dialog =
+                        Some(Dialog::input("Find a station", "Name, genre or country", String::new(), dialogs::InputFor::RadioSearch));
+                }
                 Some(_) => self.focus = Focus::List,
                 None => {}
             },
@@ -764,6 +824,7 @@ impl App {
             Action::MiniMode => self.mini = !self.mini,
             Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
+            Action::OpenVideo => self.open_video(),
             Action::Equalizer => self.dialog = Some(Dialog::Eq { band: 0 }),
             Action::LyricsEarlier | Action::LyricsLater => {
                 let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {
@@ -1111,6 +1172,10 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::RadioFav(on) => {
+                self.info(if on { "Added to radio favorites" } else { "Removed from radio favorites" });
+                self.reload_lists_matching(crate::source::radio::FAVORITES);
+            }
             Msg::MbResults(r) => {
                 if let Some(d) = &mut self.dialog {
                     d.mb_results(r);
@@ -1380,6 +1445,9 @@ pub fn album_title(t: &Track) -> String {
 }
 
 /// Start the TUI.
+/// Sidebar entry that asks for a radio search.
+pub const RADIO_FIND: &str = "radio:find";
+
 /// A background part ended unexpectedly.
 fn stopped(what: &str) -> anyhow::Error {
     anyhow::anyhow!("internal error: the {what} part stopped")
@@ -1392,6 +1460,8 @@ pub fn run(cfg: Config) -> Result<()> {
     let local = Arc::new(LocalSource::new(lib.clone())?);
     let mut sources = Sources::default();
     sources.add(local.clone());
+    let radio = Arc::new(crate::source::radio::RadioSource::open(&crate::config::data_dir().join("radio.db"))?);
+    sources.add(radio.clone());
     let sources = Arc::new(sources);
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
     engine.set_eq(cfg.eq_on, &cfg.eq_bands);
@@ -1424,7 +1494,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker = Worker::start(local, w_tx);
+    let worker = Worker::start(local, radio, w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
@@ -1665,7 +1735,11 @@ impl App {
             items: q
                 .items()
                 .iter()
-                .filter_map(|i| Some(session::Item { path: i.track.r.as_ref()?.id.clone(), from: i.from.clone() }))
+                .filter_map(|i| {
+                    let r = i.track.r.as_ref()?;
+                    let source = (&*r.source != crate::source::local::ID).then(|| r.source.to_string());
+                    Some(session::Item { path: r.id.clone(), from: i.from.clone(), source })
+                })
                 .collect(),
             current: q.current().and_then(|i| i.track.r.as_ref().map(|r| r.id.clone())),
             position_ms: self.engine.position().as_millis() as u64,

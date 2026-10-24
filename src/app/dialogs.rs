@@ -47,6 +47,7 @@ pub enum InputFor {
     Export(i64),
     AddFolder,
     Import,
+    RadioSearch,
 }
 
 pub enum Dialog {
@@ -645,6 +646,7 @@ impl Dialog {
                         InputFor::RenamePlaylist(id) => app.send_job(Job::RenamePlaylist { id, name: v }),
                         InputFor::Export(id) => app.send_job(Job::Export { id, path: crate::config::expand(&v) }),
                         InputFor::Import => app.send_job(Job::Import { path: crate::config::expand(&v) }),
+                        InputFor::RadioSearch => app.drill(format!("Radio · {v}"), format!("{}{v}", crate::source::radio::SEARCH)),
                         InputFor::AddFolder => {
                             let p = crate::config::expand(&v);
                             if !p.is_dir() {

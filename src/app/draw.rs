@@ -299,6 +299,11 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     if v.items.is_empty() {
         let msg = match (v.kind, app.scan) {
             (ListKind::Queue, _) => "Queue is empty · a adds songs".to_string(),
+            _ if v.node == super::RADIO_FIND => "Press enter to search stations by name, genre or country".into(),
+            _ if v.node == crate::source::radio::FAVORITES => {
+                format!("No favorite stations yet · {} on a station adds it", app.keys.hint(Action::Like))
+            }
+            _ if v.node.starts_with("radio:") => "No stations found".into(),
             (_, Some((d, n))) => format!("Scanning… {d}/{n}"),
             _ if app.library_size == 0 && v.node != "queue" => "No music yet. Add folders in Settings (S) → Library.".into(),
             _ => "Nothing here".into(),
@@ -510,6 +515,18 @@ fn progress(buf: &mut Buffer, app: &mut App, r: Rect) {
     let t = &app.theme;
     let snap = app.now();
     let pos = app.engine.position().as_millis() as u64;
+    if snap.track.as_deref().is_some_and(is_live) {
+        // Radio: no end and no seeking; show how long you've been listening.
+        let a = fmt_time(pos);
+        put(buf, r.x, r.y, &a, 8, Style::default().fg(c(t.fg)));
+        let bx = r.x + a.width() as u16 + 1;
+        let bw = r.width.saturating_sub(a.width() as u16 + 9);
+        for i in 0..bw {
+            buf.set_string(bx + i, r.y, "─", Style::default().fg(c(t.track)));
+        }
+        put_right(buf, r.x + r.width, r.y, "● LIVE", 6, Style::default().fg(c(t.accent)).add_modifier(Modifier::BOLD));
+        return;
+    }
     let len = snap.track.as_ref().and_then(|t| t.duration_ms).unwrap_or(0);
     let pos = pos.min(len.max(pos));
     let a = fmt_time(pos);
@@ -534,6 +551,11 @@ fn progress(buf: &mut Buffer, app: &mut App, r: Rect) {
         };
         buf.set_string(bx + i, r.y, ch, Style::default().fg(c(col)));
     }
+}
+
+/// Internet radio: endless, no seeking.
+pub fn is_live(t: &Track) -> bool {
+    t.r.as_ref().is_some_and(|r| &*r.source == crate::source::radio::ID)
 }
 
 /// Player controls: (text, color, bold, what a click does).
@@ -1200,14 +1222,18 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
     let pos = app.engine.position().as_millis() as u64;
     let len = track.duration_ms.unwrap_or(0);
     let bar = Rect { y: inner.y + 1, height: 1, ..inner };
-    app.hit.progress = bar;
+    let live = is_live(&track);
+    if !live {
+        app.hit.progress = bar;
+    }
     let frac = if len > 0 { (pos as f64 / len as f64).clamp(0.0, 1.0) } else { 0.0 };
     let fillw = (bar.width as f64 * frac).round() as u16;
     for i in 0..bar.width {
         let (ch, col) = if i < fillw { ("━", t.accent) } else { ("─", t.track) };
         buf.set_string(bar.x + i, bar.y, ch, Style::default().fg(c(col)));
     }
-    let time = format!("{} / {}", fmt_time(pos.min(len.max(pos))), fmt_time(len));
+    let time =
+        if live { format!("● LIVE  {}", fmt_time(pos)) } else { format!("{} / {}", fmt_time(pos.min(len.max(pos))), fmt_time(len)) };
     // The time always fits; the buttons give way in very narrow windows.
     let tw = (time.width() as u16).min(inner.width);
     put_right(buf, right, inner.y + 2, &time, tw, Style::default().fg(c(t.muted)));

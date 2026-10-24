@@ -88,6 +88,17 @@ impl FileStream {
         Ok(s)
     }
 
+    /// Decode from a stream that cannot seek (internet radio). `ext` is a format hint.
+    pub fn open_stream(src: Box<dyn symphonia::core::io::MediaSource>, ext: &str) -> Result<Self> {
+        let mss = MediaSourceStream::new(src, Default::default());
+        let mut hint = Hint::new();
+        hint.with_extension(ext);
+        let reader = symphonia::default::get_probe()
+            .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
+            .context("this station sends a format Musinator can't play")?;
+        Self::from_reader(reader, 0, None)
+    }
+
     fn from_reader(reader: Box<dyn FormatReader>, size: u64, mp4: Option<Mp4Gapless>) -> Result<Self> {
         let track = reader.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
         let params = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or_else(|| anyhow!("no audio codec parameters"))?.clone();

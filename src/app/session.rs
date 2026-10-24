@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Item {
+    /// File path, or the id inside `source`.
     pub path: String,
     pub from: Option<String>,
+    /// Where it comes from when not a local file (e.g. "radio").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
