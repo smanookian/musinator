@@ -10,7 +10,7 @@ use crossbeam_channel as cb;
 use image::DynamicImage;
 use ratatui::layout::Size;
 use ratatui_image::Resize;
-use ratatui_image::picker::{Capability, Picker, ProtocolType};
+use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::Protocol;
 use ratatui_image::protocol::kitty::Kitty;
 
@@ -157,7 +157,8 @@ pub fn protocol(picker: &Picker, img: DynamicImage, id: u32) -> Option<Protocol>
     let fs = picker.font_size();
     let cells = Size::new(img.width().div_ceil(fs.width as u32) as u16, img.height().div_ceil(fs.height as u32) as u16);
     if picker.protocol_type() == ProtocolType::Kitty {
-        let compress = picker.capabilities().contains(&Capability::KittyCompression);
+        // zlib (o=z): Kitty and Ghostty both read it; transparent areas shrink to almost nothing.
+        let compress = true;
         Kitty::new(img, cells, id, picker.tmux_detected(), compress).ok().map(Protocol::Kitty)
     } else {
         picker.new_protocol(img, cells, Resize::Fit(None)).ok()

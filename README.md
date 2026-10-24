@@ -147,6 +147,8 @@ More: [search](docs/screenshots/search-catppuccin.png) ·
 
 Like karaoke apps, Musinator shows the next line a little before it is sung (Settings → Appearance → Lyrics lead time, default 0.3 s). The lyric clock follows what you hear: it subtracts PipeWire's output delay. If one song is still off, `[` / `]` fix that song.
 
+Lyrics with word times ("enhanced LRC", e.g. `[01:00.91]<01:00.91> You <01:01.21> got`) light up word by word, like karaoke: each word fills when it is sung.
+
 ## Files
 
 - Settings: `~/.config/musinator/config.toml` (you never need to edit it)
