@@ -133,6 +133,8 @@ pub struct App {
     pub sleep: Option<Sleep>,
     /// When an online lyrics lookup started (shows a spinner).
     pub lyrics_lookup: Option<Instant>,
+    /// Full-screen lyrics view is open.
+    pub lyrics_full: bool,
     /// Ratings changed this session (lists may still hold old track copies).
     pub ratings: std::collections::HashMap<TrackRef, Option<u8>>,
     /// (bg, fg) last sent to the terminal with OSC 11/10.
@@ -542,6 +544,11 @@ impl App {
     }
 
     fn back(&mut self) {
+        if self.lyrics_full {
+            self.lyrics_full = false;
+            self.dirty = true;
+            return;
+        }
         match self.screen {
             Screen::NowPlaying => self.screen = Screen::Library,
             Screen::Library => {
@@ -733,6 +740,7 @@ impl App {
                 self.lyrics_lookup = Some(Instant::now());
                 self.worker.send(Job::FetchLyrics { track: t, next_to_song: self.cfg.save_lyrics_next });
             }
+            Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
             Action::LyricsEarlier | Action::LyricsLater => {
                 let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {
@@ -1350,6 +1358,7 @@ pub fn run(cfg: Config) -> Result<()> {
         lyrics_offset: 0,
         sleep: None,
         lyrics_lookup: None,
+        lyrics_full: false,
         ratings: Default::default(),
         term_colors: None,
         kitty_ok,

@@ -143,6 +143,16 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
     let main = Rect { height: area.height - 1, ..area };
     let status = Rect { y: area.y + area.height - 1, height: 1, ..area };
+    if app.lyrics_full {
+        full_lyrics(f, app, area);
+        if let Some(mut d) = app.dialog.take() {
+            d.draw(f, app);
+            if app.dialog.is_none() {
+                app.dialog = Some(d);
+            }
+        }
+        return;
+    }
     match app.screen {
         Screen::Library => library(f, app, main),
         Screen::NowPlaying => now_playing(f, app, main),
@@ -912,5 +922,76 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
     put(buf, r.x, r.y, &left.0, r.width.saturating_sub(rw + 3), Style::default().fg(c(left.1)).bg(c(t.status_bar)));
     if rw > 0 {
         put_right(buf, r.x + r.width - 1, r.y, &right, rw, Style::default().fg(c(t.muted)).bg(c(t.status_bar)));
+    }
+}
+
+// ---------------- full-screen lyrics ----------------
+
+/// Put `s` centered on row `y` of `r`.
+fn put_center(buf: &mut Buffer, r: Rect, y: u16, s: &str, st: Style) {
+    let s = fit(s, r.width.saturating_sub(4) as usize);
+    let w = s.width() as u16;
+    buf.set_string(r.x + (r.width.saturating_sub(w)) / 2, y, &s, st);
+}
+
+fn full_lyrics(f: &mut Frame, app: &mut App, area: Rect) {
+    let t = app.theme.clone();
+    let buf = f.buffer_mut();
+    fill(buf, area, t.bg);
+    let body = Rect { y: area.y + 1, height: area.height.saturating_sub(3), ..area };
+    let mid = body.y + body.height / 2;
+    let muted = Style::default().fg(c(t.muted));
+    let snap = app.now();
+    match app.current_lyric() {
+        Some((l, cur)) if !l.synced.is_empty() => {
+            // Two rows per line; the current line sits in the middle.
+            let cur_i = cur.map(|c| c as i64).unwrap_or(-1);
+            for (k, (_, line)) in l.synced.iter().enumerate() {
+                let y = mid as i64 + (k as i64 - cur_i) * 2;
+                if y < body.y as i64 || y >= (body.y + body.height) as i64 {
+                    continue;
+                }
+                let st = if k as i64 == cur_i {
+                    Style::default().fg(c(t.accent)).add_modifier(Modifier::BOLD)
+                } else if k as i64 == cur_i + 1 {
+                    Style::default().fg(c(t.fg))
+                } else {
+                    muted
+                };
+                let text = if line.trim().is_empty() { "♪" } else { line.as_str() };
+                put_center(buf, body, y as u16, text, st);
+            }
+        }
+        Some((l, _)) => {
+            // Plain lyrics: scroll with the song.
+            let lines: Vec<&str> = l.plain.as_deref().unwrap_or("").lines().collect();
+            let len = snap.track.as_ref().and_then(|t| t.duration_ms).unwrap_or(1).max(1);
+            let frac = app.engine.position().as_millis() as f64 / len as f64;
+            let top = ((lines.len() as f64 * frac) as usize).saturating_sub(body.height as usize / 2);
+            for (k, line) in lines.iter().skip(top).take(body.height as usize).enumerate() {
+                put_center(buf, body, body.y + k as u16, line, Style::default().fg(c(t.fg)));
+            }
+        }
+        None => {
+            let msg = match app.lookup_label() {
+                Some(l) => format!("{l} online…"),
+                None if snap.track.is_none() => "Nothing playing".into(),
+                None => format!("No lyrics · {} looks them up online", app.keys.hint(Action::FetchLyrics)),
+            };
+            put_center(buf, body, mid, &msg, muted);
+        }
+    }
+    // Bottom: title · artist, progress, close hint.
+    let y = area.y + area.height - 1;
+    if let Some(tr) = snap.track.as_ref() {
+        let left = format!("{} · {}", tr.display_title(), tr.display_artist());
+        let lw = (left.width() as u16 + 2).min(area.width / 3);
+        put(buf, area.x + 1, y, &left, lw.saturating_sub(1), Style::default().fg(c(t.fg)));
+        let hint = format!("{} / esc close", app.keys.hint(Action::FullLyrics));
+        let hw = hint.width() as u16;
+        put_right(buf, area.x + area.width - 1, y, &hint, hw, muted);
+        let px = area.x + lw + 1;
+        let pw = area.width.saturating_sub(lw + hw + 4);
+        progress(buf, app, Rect { x: px, y, width: pw, height: 1 });
     }
 }
