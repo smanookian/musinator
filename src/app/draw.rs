@@ -300,6 +300,7 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
         let msg = match (v.kind, app.scan) {
             (ListKind::Queue, _) => "Queue is empty · a adds songs".to_string(),
             _ if v.node == super::RADIO_FIND => "Press enter to search stations by name, genre or country".into(),
+            _ if v.node == super::RADIO_ADD => "Press enter to add a station by its web address (it goes to Favorites)".into(),
             _ if v.node == crate::source::radio::FAVORITES => {
                 format!("No favorite stations yet · {} on a station adds it", app.keys.hint(Action::Like))
             }
@@ -400,12 +401,13 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
         }
         Item::Node(n) => {
             let right_txt = match (n.kind, n.count) {
+                (_, Some(c)) if n.id.starts_with("radio:") => format!("{c} stations"),
                 (NodeKind::Album, Some(c)) => format!("{c} songs"),
                 (NodeKind::Artist, Some(c)) => format!("{c} songs"),
                 (_, Some(c)) => c.to_string(),
                 _ => String::new(),
             };
-            let rx = put_right(buf, right, r.y, &right_txt, 12, muted);
+            let rx = put_right(buf, right, r.y, &right_txt, 14, muted);
             let avail = rx.saturating_sub(x + 2);
             let prefix = if n.kind == NodeKind::Folder { "▸ " } else { "" };
             let title = format!("{prefix}{}", n.title);

@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::{Caps, Item, Lyrics, Page, SearchHits, Source, Stream, StreamInfo};
+use super::{Caps, Item, Lyrics, Node, NodeKind, Page, SearchHits, Source, Stream, StreamInfo};
 use crate::decode::FileStream;
 use crate::model::{ArtRef, AudioFormat, SourceId, Track, TrackRef};
 
@@ -29,8 +29,15 @@ const UA: &str = concat!("Musinator/", env!("CARGO_PKG_VERSION"), " (https://git
 /// Nodes shown in the sidebar.
 pub const FAVORITES: &str = "radio:favorites";
 pub const POPULAR: &str = "radio:popular";
+pub const GENRES: &str = "radio:genres";
+pub const COUNTRIES: &str = "radio:countries";
 /// Followed by the search text.
 pub const SEARCH: &str = "radio:search:";
+/// Followed by a genre name / a country code.
+const GENRE: &str = "radio:genre:";
+const COUNTRY: &str = "radio:country:";
+/// Station ids of streams the user added by address.
+const CUSTOM: &str = "custom:";
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Station {
@@ -57,9 +64,10 @@ impl Station {
             tags: s("tags"),
             favicon: s("favicon"),
         };
-        // HLS playlists and unknown codecs can't be played.
+        // HLS playlists and unknown codecs can't be played. Own streams are checked when added.
         let hls = v["hls"].as_u64().unwrap_or(0) == 1;
-        let ok = matches!(st.codec.to_ascii_uppercase().as_str(), "MP3" | "AAC" | "AAC+" | "OGG" | "OPUS" | "FLAC");
+        let custom = st.uuid.starts_with(CUSTOM);
+        let ok = custom || matches!(st.codec.to_ascii_uppercase().as_str(), "MP3" | "AAC" | "AAC+" | "OGG" | "OPUS" | "FLAC");
         (!st.uuid.is_empty() && !st.url.is_empty() && !hls && ok).then_some(st)
     }
 
@@ -198,6 +206,83 @@ impl RadioSource {
         v.as_array().into_iter().flatten().filter_map(Station::from_json).filter(|s| seen.insert(s.uuid.clone())).collect()
     }
 
+    /// Genres or countries with the most stations, as lists to open.
+    fn groups(node: &str) -> Result<Vec<Item>> {
+        let genres = node == GENRES;
+        let v = if genres {
+            api(
+                "/tags",
+                &[("order", "stationcount".into()), ("reverse", "true".into()), ("hidebroken", "true".into()), ("limit", "200".into())],
+            )?
+        } else {
+            api("/countries", &[("order", "stationcount".into()), ("reverse", "true".into()), ("hidebroken", "true".into())])?
+        };
+        Ok(v.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|g| {
+                let name = g["name"].as_str()?.trim();
+                let count = g["stationcount"].as_u64().unwrap_or(0);
+                let (id, kind) = if genres {
+                    (format!("{GENRE}{name}"), NodeKind::Genre)
+                } else {
+                    (format!("{COUNTRY}{}", g["iso_3166_1"].as_str()?), NodeKind::Folder)
+                };
+                (!name.is_empty() && count >= 5)
+                    .then(|| Item::Node(Node { id, kind, title: name.to_string(), subtitle: String::new(), count: Some(count), art: None }))
+            })
+            .collect())
+    }
+
+    fn stations_in(path: &str, key: &str) -> Result<Vec<Station>> {
+        let q = [("order", "clickcount".to_string()), ("reverse", "true".into()), ("hidebroken", "true".into()), ("limit", "300".into())];
+        Ok(Self::list(api(&format!("{path}/{}", urlencode(key)), &q)?))
+    }
+
+    /// Check a stream address the user typed and keep it as a favorite.
+    /// Returns the station name (from the stream, else the host).
+    pub fn add_custom(&self, url: &str) -> Result<String> {
+        let url = url.trim();
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            bail!("The address must start with http:// or https://");
+        }
+        let real = resolve_playlist(url)?;
+        let resp =
+            agent(10).get(&real).header("User-Agent", UA).header("Icy-MetaData", "1").call().context("the address can't be reached")?;
+        if !resp.status().is_success() {
+            bail!("the address answered {}", resp.status());
+        }
+        let header = |k: &str| resp.headers().get(k).and_then(|v| v.to_str().ok()).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        let ctype = header("content-type").unwrap_or_default().to_ascii_lowercase();
+        let codec = if ctype.contains("aac") {
+            "AAC"
+        } else if ctype.contains("ogg") || ctype.contains("opus") {
+            "OGG"
+        } else if ctype.contains("flac") {
+            "FLAC"
+        } else if ctype.contains("mpeg") || ctype.contains("mp3") {
+            "MP3"
+        } else {
+            bail!("This address is not an audio stream ({})", if ctype.is_empty() { "unknown type" } else { &ctype });
+        };
+        let host = real.split("://").nth(1).and_then(|r| r.split(['/', ':']).next()).unwrap_or(url).to_string();
+        let st = Station {
+            uuid: format!("{CUSTOM}{url}"),
+            name: header("icy-name").unwrap_or(host),
+            url: url.to_string(),
+            codec: codec.into(),
+            bitrate: header("icy-br").and_then(|b| b.split(',').next()?.trim().parse().ok()).unwrap_or(0),
+            country: String::new(),
+            tags: header("icy-genre").unwrap_or_default(),
+            favicon: String::new(),
+        };
+        self.remember(std::slice::from_ref(&st));
+        if !self.is_fav(&st.uuid) {
+            self.toggle_fav(&st.uuid)?;
+        }
+        Ok(st.name)
+    }
+
     fn popular() -> Result<Vec<Station>> {
         Ok(Self::list(api("/stations/topclick/150", &[("hidebroken", "true".into())])?))
     }
@@ -237,6 +322,12 @@ impl Source for RadioSource {
             self.favorites()
         } else if node == POPULAR {
             Self::popular()?
+        } else if node == GENRES || node == COUNTRIES {
+            return Self::groups(node);
+        } else if let Some(g) = node.strip_prefix(GENRE) {
+            Self::stations_in("/stations/bytagexact", g)?
+        } else if let Some(c) = node.strip_prefix(COUNTRY) {
+            Self::stations_in("/stations/bycountrycodeexact", c)?
         } else if let Some(q) = node.strip_prefix(SEARCH) {
             Self::search_stations(q)?
         } else {
@@ -256,8 +347,12 @@ impl Source for RadioSource {
 
     fn open(&self, r: &TrackRef) -> Result<Box<dyn Stream>> {
         let st = self.station(&r.id).context("unknown station")?;
-        // Tell radio-browser.info about the play (their rule) and get the current address.
-        let url = api(&format!("/url/{}", st.uuid), &[]).ok().and_then(|v| v["url"].as_str().map(str::to_string)).unwrap_or(st.url.clone());
+        let url = if st.uuid.starts_with(CUSTOM) {
+            resolve_playlist(&st.url)?
+        } else {
+            // Tell radio-browser.info about the play (their rule) and get the current address.
+            api(&format!("/url/{}", st.uuid), &[]).ok().and_then(|v| v["url"].as_str().map(str::to_string)).unwrap_or(st.url.clone())
+        };
         Ok(Box::new(RadioStream::open(&url, &st)?))
     }
 
@@ -272,6 +367,38 @@ impl Source for RadioSource {
     fn lyrics(&self, _r: &TrackRef) -> Result<Option<Lyrics>> {
         Ok(None)
     }
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// The first stream address in a `.pls` / `.m3u` playlist text.
+pub fn playlist_entry(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .map(|l| if l.to_ascii_lowercase().starts_with("file") { l.split_once('=').map_or(l, |(_, v)| v.trim()) } else { l })
+        .find(|l| l.starts_with("http://") || l.starts_with("https://"))
+        .map(str::to_string)
+}
+
+/// Station links are often small playlists (.pls / .m3u) pointing at the stream.
+fn resolve_playlist(url: &str) -> Result<String> {
+    let path = url.split('?').next().unwrap_or(url).to_ascii_lowercase();
+    if path.ends_with(".m3u8") {
+        bail!("HLS streams (.m3u8) are not supported");
+    }
+    if !(path.ends_with(".pls") || path.ends_with(".m3u")) {
+        return Ok(url.to_string());
+    }
+    let mut resp = agent(10).get(url).header("User-Agent", UA).call().context("the address can't be reached")?;
+    let text = resp.body_mut().with_config().limit(256 << 10).read_to_string()?;
+    playlist_entry(&text).context("no stream address in this playlist")
 }
 
 // ---------------- playback ----------------
@@ -464,6 +591,16 @@ mod tests {
         let audio: Vec<u8> = rx.try_iter().flatten().collect();
         assert_eq!(audio, b"abcdefgh");
         assert_eq!(title.lock().as_deref(), Some("X"));
+    }
+
+    #[test]
+    fn finds_the_stream_in_playlists() {
+        assert_eq!(
+            playlist_entry("[playlist]\nNumberOfEntries=1\nFile1=http://a.example/live\nTitle1=X").as_deref(),
+            Some("http://a.example/live")
+        );
+        assert_eq!(playlist_entry("#EXTM3U\n#EXTINF:-1,X\nhttps://b.example/s.mp3\n").as_deref(), Some("https://b.example/s.mp3"));
+        assert_eq!(playlist_entry("nothing"), None);
     }
 
     #[test]

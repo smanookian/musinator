@@ -320,9 +320,14 @@ impl App {
         }
         s.push(Side::Blank);
         s.push(Side::Header("Radio"));
-        for (l, n) in
-            [("Favorites", crate::source::radio::FAVORITES), ("Popular", crate::source::radio::POPULAR), ("Find a station…", RADIO_FIND)]
-        {
+        for (l, n) in [
+            ("Favorites", crate::source::radio::FAVORITES),
+            ("Popular", crate::source::radio::POPULAR),
+            ("Genres", crate::source::radio::GENRES),
+            ("Countries", crate::source::radio::COUNTRIES),
+            ("Find a station…", RADIO_FIND),
+            ("Add stream address…", RADIO_ADD),
+        ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         s.push(Side::Blank);
@@ -375,8 +380,8 @@ impl App {
                 v
             }
             // Searching needs typing: show a hint until enter is pressed.
-            Side::Node { node, .. } if node == RADIO_FIND => {
-                let mut v = ListView::new("Find a station".into(), RADIO_FIND.into(), ListKind::Node, seq);
+            Side::Node { node, label } if node == RADIO_FIND || node == RADIO_ADD => {
+                let mut v = ListView::new(label.trim_end_matches('…').into(), node, ListKind::Node, seq);
                 v.loading = false;
                 v
             }
@@ -387,7 +392,7 @@ impl App {
         let node = view.node.clone();
         let kind = view.kind;
         self.lists = vec![view];
-        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND {
+        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND && node != RADIO_ADD {
             self.worker.send(Job::Children { seq, node });
         }
         if kind == ListKind::Queue {
@@ -584,6 +589,9 @@ impl App {
                 Some(Side::Node { node, .. }) if node == RADIO_FIND => {
                     self.dialog =
                         Some(Dialog::input("Find a station", "Name, genre or country", String::new(), dialogs::InputFor::RadioSearch));
+                }
+                Some(Side::Node { node, .. }) if node == RADIO_ADD => {
+                    self.dialog = Some(Dialog::input("Add stream address", "Address", String::new(), dialogs::InputFor::RadioUrl));
                 }
                 Some(_) => self.focus = Focus::List,
                 None => {}
@@ -1172,6 +1180,13 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::StreamAdded(r) => match r {
+                Ok(name) => {
+                    self.info(format!("Added {name} to radio favorites"));
+                    self.reload_lists_matching(crate::source::radio::FAVORITES);
+                }
+                Err(e) => self.error(e),
+            },
             Msg::RadioFav(on) => {
                 self.info(if on { "Added to radio favorites" } else { "Removed from radio favorites" });
                 self.reload_lists_matching(crate::source::radio::FAVORITES);
@@ -1447,6 +1462,8 @@ pub fn album_title(t: &Track) -> String {
 /// Start the TUI.
 /// Sidebar entry that asks for a radio search.
 pub const RADIO_FIND: &str = "radio:find";
+/// Sidebar entry that asks for a stream address.
+pub const RADIO_ADD: &str = "radio:add";
 
 /// A background part ended unexpectedly.
 fn stopped(what: &str) -> anyhow::Error {
@@ -1471,7 +1488,12 @@ pub fn run(cfg: Config) -> Result<()> {
     // Terminal.
     let mut terminal = ratatui::init();
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
-    let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
+    // Asking the terminal about pictures: tmux/screen and the Linux console don't
+    // answer, and the waiting reader would then swallow the first key press.
+    let term = std::env::var("TERM").unwrap_or_default();
+    let no_answer =
+        std::env::var_os("TMUX").is_some() || term.starts_with("screen") || term.starts_with("tmux") || term == "linux" || term == "dumb";
+    let mut picker = if no_answer { Picker::halfblocks() } else { Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks()) };
     let kitty_ok = picker.protocol_type() == ProtocolType::Kitty;
     // Real images on Kitty/Ghostty, half-blocks everywhere else.
     if !kitty_ok || cfg.images == "halfblocks" {

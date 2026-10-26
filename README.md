@@ -13,7 +13,7 @@ A modern-looking music player for the terminal. Linux and Omarchy first.
 - **Real format.** The audio line shows codec, bit depth and rate, e.g. `FLAC 24/96 → 48 kHz · gapless · RG −1.6 dB`. `→ 48 kHz` means PipeWire resamples. `bit-perfect` means it does not.
 - **Real album art** on Kitty and Ghostty. Half-blocks in other terminals.
 - Visualizer from the real audio, synced lyrics (`.lrc`, embedded, or looked up on [LRCLIB](https://lrclib.net) when you press `ctrl+l`; found lyrics are cached, or saved next to the song if you turn that on in Settings → Library), playlists (`.m3u8` import/export), search, smart lists.
-- Internet radio from [radio-browser.info](https://www.radio-browser.info) (free, no account): Popular, search by name, genre or country, and your Favorites (`L` on a station). Shows the song on air. Musinator only asks radio-browser.info when you open these lists.
+- Internet radio from [radio-browser.info](https://www.radio-browser.info) (free, no account): Popular, Genres, Countries, search by name, genre or country, your Favorites (`L` on a station), and your own stations by web address (also `.pls`/`.m3u` links). Shows the song on air. Musinator only asks radio-browser.info when you open these lists.
 - 22 themes plus **Match Omarchy**, which follows your Omarchy theme live. Every theme passes a contrast test.
 - Media keys and `playerctl` (MPRIS). A module for the Omarchy bar or Waybar.
 - Every setting is in the app. Every key can be changed.

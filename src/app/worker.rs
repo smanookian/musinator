@@ -68,6 +68,8 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    /// A stream address typed by the user.
+    AddStream(String),
     WriteTags {
         paths: Vec<std::path::PathBuf>,
         fields: [Option<String>; 8],
@@ -131,6 +133,8 @@ pub enum Job {
 pub enum Msg {
     /// A station became (true) or stopped being a favorite.
     RadioFav(bool),
+    /// Own stream checked and saved (its name), or why not.
+    StreamAdded(Result<String, String>),
     MbResults(Result<Vec<crate::library::musicbrainz::Release>, String>),
     MbFill(Result<Box<MbFill>, String>),
     /// Tags read for the editor: file paths, each file's fields.
@@ -396,6 +400,7 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
                 .collect();
             send(Msg::Restored { session, tracks });
         }
+        Job::AddStream(url) => send(Msg::StreamAdded(radio.add_custom(&url).map_err(|e| format!("{e:#}")))),
         // Radio: "like" means favorite station.
         Job::Like(r) if &*r.source == crate::source::radio::ID => match radio.toggle_fav(&r.id) {
             Ok(on) => send(Msg::RadioFav(on)),
