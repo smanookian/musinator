@@ -82,12 +82,61 @@ pub struct ListView {
     pub loading: bool,
     pub seq: u64,
     pub error: Option<String>,
+    /// Typed filter (`ctrl+f`); `all` holds the unfiltered items while it is set.
+    pub filter: String,
+    pub all: Option<Vec<Item>>,
+    /// The filter box has the keyboard.
+    pub filtering: bool,
 }
 
 impl ListView {
     fn new(title: String, node: String, kind: ListKind, seq: u64) -> Self {
-        Self { title, node, kind, items: Vec::new(), cursor: 0, offset: 0, loading: kind == ListKind::Node, seq, error: None }
+        Self {
+            title,
+            node,
+            kind,
+            items: Vec::new(),
+            cursor: 0,
+            offset: 0,
+            loading: kind == ListKind::Node,
+            seq,
+            error: None,
+            filter: String::new(),
+            all: None,
+            filtering: false,
+        }
     }
+    /// Show only items matching the filter (all words, any order, ignoring case).
+    pub fn apply_filter(&mut self) {
+        let all = self.all.get_or_insert_with(|| std::mem::take(&mut self.items));
+        let words: Vec<String> = self.filter.to_lowercase().split_whitespace().map(str::to_string).collect();
+        self.items = all
+            .iter()
+            .filter(|it| {
+                let text = match it {
+                    Item::Track(t) => format!("{} {} {} {}", t.display_title(), t.artist, t.album, t.album_artist),
+                    Item::Node(n) => format!("{} {}", n.title, n.subtitle),
+                }
+                .to_lowercase();
+                words.iter().all(|w| text.contains(w.as_str()))
+            })
+            .cloned()
+            .collect();
+        self.cursor = 0;
+        self.offset = 0;
+    }
+
+    pub fn clear_filter(&mut self) {
+        if let Some(all) = self.all.take() {
+            // Keep the selected item selected.
+            let sel = self.items.get(self.cursor).map(item_key);
+            self.items = all;
+            self.cursor = sel.and_then(|k| self.items.iter().position(|i| item_key(i) == k)).unwrap_or(0);
+        }
+        self.filter.clear();
+        self.filtering = false;
+    }
+
     pub fn is_albums(&self) -> bool {
         !self.items.is_empty() && self.items.iter().all(|i| matches!(i, Item::Node(n) if n.kind == NodeKind::Album))
     }
@@ -126,7 +175,9 @@ pub struct App {
     pub images_on: bool,
     pub pics: Vec<(Slot, Pic)>,
     pub grid_pics: std::collections::HashMap<ArtRef, Pic>,
-    scrobbler: crate::lastfm::Scrobbler,
+    pub scrobbler: crate::lastfm::Scrobbler,
+    /// Logged-in Last.fm user (cached; the file is read on login/logout only).
+    pub lastfm_user: Option<String>,
     /// The radio song on air now and when it started (scrobbled when the next one starts).
     on_air: Option<(Arc<Track>, Instant)>,
     /// The song `L` was pressed on (to love it on Last.fm when the like is saved).
@@ -262,6 +313,30 @@ impl App {
         }
     }
 
+    /// Last.fm part of the info line: "last.fm", "last.fm ✓" once the song counts,
+    /// plus waiting scrobbles. None when not logged in or off.
+    pub fn lastfm_status(&self) -> Option<(String, bool)> {
+        if self.lastfm_user.is_none() || !self.cfg.lastfm_scrobble {
+            return None;
+        }
+        let t = self.now().track?;
+        let live = draw::is_live(&t);
+        let counted = if live {
+            if !t.on_air || !self.cfg.lastfm_radio {
+                return None;
+            }
+            self.on_air.as_ref().is_some_and(|(_, since)| crate::lastfm::counts(None, since.elapsed()))
+        } else {
+            crate::lastfm::counts(t.duration_ms, self.engine.position())
+        };
+        let waiting = self.scrobbler.waiting.load(std::sync::atomic::Ordering::Relaxed);
+        let mut s = if counted { "last.fm ✓".to_string() } else { "last.fm".to_string() };
+        if waiting > 0 {
+            s.push_str(&format!(" · {waiting} waiting"));
+        }
+        Some((s, counted))
+    }
+
     /// The equalizer changes the sound (on and not flat).
     pub fn eq_active(&self) -> bool {
         self.cfg.eq_on && self.cfg.eq_bands.iter().any(|g| g.abs() > 0.01)
@@ -368,7 +443,7 @@ impl App {
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
-        if crate::lastfm::user().is_some() {
+        if self.lastfm_user.is_some() {
             s.push(Side::Blank);
             s.push(Side::Header("Last.fm"));
             for (l, n) in [
@@ -693,7 +768,56 @@ impl App {
         self.dirty = true;
     }
 
+    /// Typing into the list filter. True when the key was used.
+    fn filter_key(&mut self, k: &crossterm::event::KeyEvent) -> bool {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        if self.screen != Screen::Library || self.focus != Focus::List {
+            return false;
+        }
+        let Some(v) = self.list_mut().filter(|v| v.filtering) else { return false };
+        match k.code {
+            KeyCode::Esc => v.clear_filter(),
+            KeyCode::Enter => {
+                v.filtering = false;
+                if v.filter.is_empty() {
+                    v.clear_filter();
+                }
+                self.enter();
+            }
+            KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown => {
+                v.filtering = false;
+                if v.filter.is_empty() {
+                    v.clear_filter();
+                }
+                return false;
+            }
+            KeyCode::Backspace => {
+                v.filter.pop();
+                v.apply_filter();
+            }
+            KeyCode::Char('u') if k.modifiers.contains(KeyModifiers::CONTROL) => {
+                v.filter.clear();
+                v.apply_filter();
+            }
+            KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => {
+                v.filter.push(c);
+                v.apply_filter();
+            }
+            _ => {}
+        }
+        true
+    }
+
     fn back(&mut self) {
+        // A filtered list: esc first shows the whole list again.
+        if self.screen == Screen::Library
+            && let Some(v) = self.list_mut()
+            && v.all.is_some()
+        {
+            v.clear_filter();
+            self.dirty = true;
+            return;
+        }
         if self.lyrics_full {
             self.lyrics_full = false;
             self.dirty = true;
@@ -894,6 +1018,17 @@ impl App {
             Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
             Action::OpenVideo => self.open_video(),
+            Action::Filter => {
+                // Not in the queue or playlists: moving and removing there needs the full list.
+                let ok =
+                    self.screen == Screen::Library && self.list().is_some_and(|v| v.kind == ListKind::Node && v.playlist_id().is_none());
+                if ok && let Some(v) = self.list_mut() {
+                    v.filtering = true;
+                    self.focus = Focus::List;
+                } else {
+                    self.info("This list can't be filtered");
+                }
+            }
             Action::Equalizer => self.dialog = Some(Dialog::Eq { band: 0 }),
             Action::LyricsEarlier | Action::LyricsLater => {
                 let Some(r) = self.lyrics.as_ref().map(|(r, _)| r.clone()) else {
@@ -1016,6 +1151,10 @@ impl App {
                     if keep && self.dialog.is_none() {
                         self.dialog = Some(d);
                     }
+                    self.dirty = true;
+                    return;
+                }
+                if self.filter_key(&k) {
                     self.dirty = true;
                     return;
                 }
@@ -1231,7 +1370,14 @@ impl App {
                     v.loading = false;
                     match items {
                         Ok(items) => {
-                            v.items = items;
+                            if v.all.is_some() {
+                                v.all = Some(items);
+                                let c = v.cursor;
+                                v.apply_filter();
+                                v.cursor = c.min(v.items.len().saturating_sub(1));
+                            } else {
+                                v.items = items;
+                            }
                             v.cursor = v.cursor.min(v.items.len().saturating_sub(1));
                             v.error = None;
                         }
@@ -1265,6 +1411,7 @@ impl App {
             Msg::LastfmLogin(r) => match r {
                 Ok(u) => {
                     self.info(format!("Last.fm: logged in as {u}"));
+                    self.lastfm_user = Some(u);
                     self.rebuild_side();
                 }
                 Err(e) => self.error(e),
@@ -1582,6 +1729,13 @@ pub fn album_title(t: &Track) -> String {
 }
 
 /// Start the TUI.
+fn item_key(i: &Item) -> String {
+    match i {
+        Item::Track(t) => t.r.as_ref().map(|r| format!("{}:{}", r.source, r.id)).unwrap_or_default(),
+        Item::Node(n) => n.id.clone(),
+    }
+}
+
 /// What Last.fm gets for a song; None without artist or title.
 fn lastfm_play(t: &Track, at: i64) -> Option<crate::lastfm::Play> {
     let live = draw::is_live(t);
@@ -1686,6 +1840,7 @@ pub fn run(cfg: Config) -> Result<()> {
         lib: lib.clone(),
         edited: Vec::new(),
         scrobbler: crate::lastfm::Scrobbler::start(),
+        lastfm_user: crate::lastfm::user(),
         on_air: None,
         last_liked: None,
         sources,

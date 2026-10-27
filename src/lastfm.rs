@@ -189,13 +189,17 @@ enum Cmd {
 /// Handle to the Last.fm thread. Sending never blocks.
 pub struct Scrobbler {
     tx: cb::Sender<Cmd>,
+    /// Scrobbles not sent yet (offline).
+    pub waiting: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl Scrobbler {
     pub fn start() -> Self {
         let (tx, rx) = cb::unbounded();
-        std::thread::Builder::new().name("lastfm".into()).spawn(move || run(rx)).ok();
-        Self { tx }
+        let waiting = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(load().queue.len()));
+        let w = waiting.clone();
+        std::thread::Builder::new().name("lastfm".into()).spawn(move || run(rx, w)).ok();
+        Self { tx, waiting }
     }
     pub fn now_playing(&self, p: Play) {
         let _ = self.tx.send(Cmd::NowPlaying(p));
@@ -236,10 +240,11 @@ fn flush(s: &mut State) {
     }
 }
 
-fn run(rx: cb::Receiver<Cmd>) {
+fn run(rx: cb::Receiver<Cmd>, waiting: std::sync::Arc<std::sync::atomic::AtomicUsize>) {
     let mut s = load();
     flush(&mut s);
     loop {
+        waiting.store(s.queue.len(), std::sync::atomic::Ordering::Relaxed);
         match rx.recv_timeout(Duration::from_secs(300)) {
             Ok(Cmd::NowPlaying(p)) => {
                 s = load();

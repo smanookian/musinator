@@ -253,6 +253,12 @@ fn sidebar(f: &mut Frame, app: &mut App, area: Rect) {
 fn list_hints(app: &App) -> String {
     let h = list_hints_inner(app);
     // Inside a drilled-down list: say how to get back.
+    if app.list().is_some_and(|v| v.filtering) {
+        return "type to filter  enter open  esc clear".into();
+    }
+    if app.list().is_some_and(|v| v.all.is_some()) {
+        return format!("{} clear filter  {h}", app.keys.hint(Action::Back));
+    }
     if app.lists.len() > 1 { format!("{} back  {h}", app.keys.hint(Action::Back)) } else { h }
 }
 
@@ -291,6 +297,10 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     if can_back {
         title = format!("‹ {title}");
     }
+    if let Some(v) = app.list().filter(|v| v.filtering || v.all.is_some()) {
+        let n = v.items.len();
+        title = format!("{title} · filter: {}{} ({n})", v.filter, if v.filtering { "▏" } else { "" });
+    }
     let h = list_hints(app);
     let inner = pane(f, app, area, &title, &h, focused);
     if can_back && inner.y > 0 {
@@ -314,6 +324,7 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     if v.items.is_empty() {
         let msg = match (v.kind, app.scan) {
             (ListKind::Queue, _) => "Queue is empty · a adds songs".to_string(),
+            _ if v.all.is_some() => "Nothing matches the filter".into(),
             _ if v.node == super::RADIO_FIND => "Press enter to search stations by name, genre or country".into(),
             _ if v.node == super::LASTFM_PROFILE => "Press enter to open your Last.fm profile in the browser".into(),
             _ if v.node == "lastfm:none" => "This one is not in your library".into(),
@@ -627,6 +638,9 @@ pub fn audio_info(app: &App) -> Vec<(String, Rgb)> {
     }
     if app.eq_active() {
         out.push((format!(" · EQ {}", app.cfg.eq_preset), t.accent));
+    }
+    if let Some((s, done)) = app.lastfm_status() {
+        out.push((format!(" · {s}"), if done { t.good } else { t.muted }));
     }
     match s.gain_db {
         Some(g) => {
