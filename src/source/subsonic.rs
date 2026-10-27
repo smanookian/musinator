@@ -274,7 +274,17 @@ impl Source for SubsonicSource {
     fn children(&self, node: &str, _page: Page) -> Result<Vec<Item>> {
         let l = self.login()?;
         if node == ARTISTS {
-            let r = get(&l, "getArtists", &[])?;
+            let r = match get(&l, "getArtists", &[]) {
+                Ok(r) => r,
+                // Navidrome makes its artist list only after the first full scan.
+                Err(e) => match get(&l, "getScanStatus", &[]) {
+                    Ok(s) if s["scanStatus"]["scanning"] == true => bail!(
+                        "The server is still reading your library ({} songs so far). Artists show when it's done; try again in a few minutes.",
+                        s["scanStatus"]["count"].as_u64().unwrap_or(0)
+                    ),
+                    _ => return Err(e),
+                },
+            };
             return Ok(arr(&r["artists"]["index"]).iter().flat_map(|i| arr(&i["artist"])).map(|a| Self::artist_node(&a)).collect());
         }
         if node == ALBUMS {
