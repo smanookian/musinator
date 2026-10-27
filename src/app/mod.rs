@@ -183,6 +183,8 @@ pub struct App {
     /// The song `L` was pressed on (to love it on Last.fm when the like is saved).
     last_liked: Option<Arc<Track>>,
     pub podcasts: Arc<crate::source::podcast::PodcastSource>,
+    /// Total size of podcast downloads ("1.2 GB"), updated when the Downloads list loads.
+    pub downloads_label: String,
     /// When the episode position was last saved.
     podcast_saved: Instant,
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
@@ -477,9 +479,12 @@ impl App {
         }
         s.push(Side::Blank);
         s.push(Side::Header("Podcasts"));
-        for (l, n) in
-            [("New episodes", crate::source::podcast::NEW), ("Shows", crate::source::podcast::SHOWS), ("Find a podcast…", PODCAST_FIND)]
-        {
+        for (l, n) in [
+            ("New episodes", crate::source::podcast::NEW),
+            ("Shows", crate::source::podcast::SHOWS),
+            ("Downloads", crate::source::podcast::DOWNLOADS),
+            ("Find a podcast…", PODCAST_FIND),
+        ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         if self.lastfm_user.is_some() {
@@ -1430,6 +1435,9 @@ impl App {
     fn on_worker(&mut self, m: Msg) {
         match m {
             Msg::Children { seq, items } => {
+                if self.lists.iter().any(|v| v.seq == seq && v.node == crate::source::podcast::DOWNLOADS) {
+                    self.downloads_label = crate::source::podcast::fmt_size(self.podcasts.downloads_size());
+                }
                 if let Some(v) = self.lists.iter_mut().find(|v| v.seq == seq) {
                     v.loading = false;
                     match items {
@@ -1937,6 +1945,7 @@ pub fn run(cfg: Config) -> Result<()> {
         on_air: None,
         last_liked: None,
         podcasts,
+        downloads_label: String::new(),
         podcast_saved: Instant::now(),
         sources,
         worker,

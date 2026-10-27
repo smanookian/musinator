@@ -293,6 +293,9 @@ fn list_hints_inner(app: &App) -> String {
 fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     let focused = app.focus == Focus::List;
     let mut title = app.list().map(|v| v.title.clone()).unwrap_or_default();
+    if app.list().is_some_and(|v| v.node == crate::source::podcast::DOWNLOADS && !v.items.is_empty()) {
+        title = format!("{title} · {}", app.downloads_label);
+    }
     let can_back = app.lists.len() > 1;
     if can_back {
         title = format!("‹ {title}");
@@ -331,6 +334,9 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
                 format!("No shows yet · Find a podcast, then {} on it subscribes", app.keys.hint(Action::Like))
             }
             _ if v.node == crate::source::podcast::NEW => "No new episodes".into(),
+            _ if v.node == crate::source::podcast::DOWNLOADS => {
+                format!("No downloads · {} on an episode downloads it", app.keys.hint(Action::Download))
+            }
             _ if v.node.starts_with("podcast:") => "Nothing found".into(),
             _ if v.node == super::LASTFM_PROFILE => "Press enter to open your Last.fm profile in the browser".into(),
             _ if v.node == "lastfm:none" => "This one is not in your library".into(),

@@ -21,6 +21,7 @@ use crate::model::{ArtRef, SourceId, Track, TrackRef};
 pub const ID: &str = "podcast";
 pub const NEW: &str = "podcast:new";
 pub const SHOWS: &str = "podcast:shows";
+pub const DOWNLOADS: &str = "podcast:downloads";
 /// Followed by the feed address.
 pub const FEED: &str = "podcast:feed:";
 /// Followed by the search text.
@@ -433,13 +434,22 @@ impl PodcastSource {
                 r.get::<_, i64>(3)? as u64,
                 r.get::<_, i64>(4)? as u64,
                 r.get::<_, i64>(5)? == 1,
-                r.get::<_, Option<String>>(6)?.is_some(),
+                r.get::<_, Option<String>>(6)?.and_then(|f| std::fs::metadata(f).ok()).map(|m| m.len()),
                 r.get(7)?,
                 r.get(8)?,
             ))
         })
         .map(|rows| rows.flatten().map(|t| Item::Track(Arc::new(t))).collect())
         .unwrap_or_default()
+    }
+
+    /// Size of all downloaded episodes together.
+    pub fn downloads_size(&self) -> u64 {
+        let c = self.db.lock();
+        let Ok(mut st) = c.prepare("SELECT file FROM episodes WHERE file IS NOT NULL") else { return 0 };
+        st.query_map([], |r| r.get::<_, String>(0))
+            .map(|rows| rows.flatten().filter_map(|f| std::fs::metadata(f).ok()).map(|m| m.len()).sum())
+            .unwrap_or(0)
     }
 
     fn shows(&self) -> Vec<Item> {
@@ -498,7 +508,17 @@ impl PodcastSource {
 
 /// An episode as a track: show as artist, "12 Jun 2024 · 45 min · 12 min left · ↓" as album.
 #[allow(clippy::too_many_arguments)]
-fn episode_track(id: String, title: String, date: i64, dur: u64, pos: u64, played: bool, file: bool, show: String, image: String) -> Track {
+fn episode_track(
+    id: String,
+    title: String,
+    date: i64,
+    dur: u64,
+    pos: u64,
+    played: bool,
+    file: Option<u64>,
+    show: String,
+    image: String,
+) -> Track {
     let mut info = Vec::new();
     if date > 0 {
         info.push(fmt_date(date));
@@ -511,8 +531,8 @@ fn episode_track(id: String, title: String, date: i64, dur: u64, pos: u64, playe
     } else if pos > 0 {
         info.push(format!("{} min left", (dur.saturating_sub(pos / 1000)).div_ceil(60)));
     }
-    if file {
-        info.push("↓".into());
+    if let Some(bytes) = file {
+        info.push(format!("↓ {}", fmt_size(bytes)));
     }
     Track {
         r: Some(TrackRef { source: Arc::from(ID), id }),
@@ -523,6 +543,10 @@ fn episode_track(id: String, title: String, date: i64, dur: u64, pos: u64, playe
         art: (!image.is_empty()).then(|| ArtRef { source: Arc::from(ID), id: image }),
         ..Default::default()
     }
+}
+
+pub fn fmt_size(b: u64) -> String {
+    if b >= 1 << 30 { format!("{:.1} GB", b as f64 / (1u64 << 30) as f64) } else { format!("{} MB", (b + (1 << 19)) >> 20) }
 }
 
 fn fmt_date(t: i64) -> String {
@@ -554,6 +578,9 @@ impl Source for PodcastSource {
         }
         if node == SHOWS {
             return Ok(self.shows());
+        }
+        if node == DOWNLOADS {
+            return Ok(self.episodes("WHERE e.file IS NOT NULL ORDER BY e.date DESC", []));
         }
         if let Some(q) = node.strip_prefix(SEARCH) {
             return Self::search(q);
