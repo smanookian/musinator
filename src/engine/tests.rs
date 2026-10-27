@@ -165,7 +165,7 @@ fn play_all(files: &[PathBuf]) -> Vec<f32> {
 
 fn play_with(files: &[PathBuf], cfg: GainCfg, gain: crate::model::Gain) -> Vec<f32> {
     let src: Arc<dyn Source> = Arc::new(Files(Arc::from("files")));
-    let mut sources = Sources::default();
+    let sources = Sources::default();
     sources.add(src.clone());
     let cap = Arc::new(Mutex::new(Vec::new()));
     let cap2 = cap.clone();
@@ -266,7 +266,7 @@ fn replaygain_scales_the_samples() {
 /// Engine with a capture output and a queue of `files`, album names per file.
 fn engine_with(files: &[PathBuf], albums: &[&str]) -> (Engine, Arc<Mutex<Vec<f32>>>, u64) {
     let src: Arc<dyn Source> = Arc::new(Files(Arc::from("files")));
-    let mut sources = Sources::default();
+    let sources = Sources::default();
     sources.add(src.clone());
     let cap = Arc::new(Mutex::new(Vec::new()));
     let cap2 = cap.clone();

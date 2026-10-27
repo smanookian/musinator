@@ -484,7 +484,7 @@ impl App {
             s.push(Side::Blank);
             s.push(Side::Header(srv.name.clone()));
             for (l, n) in srv.nodes() {
-                s.push(Side::Node { label: l.into(), node: n.into() });
+                s.push(Side::Node { label: l.into(), node: n });
             }
         }
         s.push(Side::Blank);
