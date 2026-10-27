@@ -1956,7 +1956,8 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker = Worker::start(local, radio, podcasts.clone(), server.clone(), jellyfin.clone(), w_tx);
+    let worker =
+        Worker::start(worker::Srcs { local, radio, podcasts: podcasts.clone(), server: server.clone(), jellyfin: jellyfin.clone() }, w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));

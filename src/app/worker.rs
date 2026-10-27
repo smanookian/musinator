@@ -227,14 +227,9 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn start(
-        local: Arc<LocalSource>,
-        radio: Arc<RadioSource>,
-        podcasts: Arc<PodcastSource>,
-        server: Arc<SubsonicSource>,
-        jellyfin: Arc<JellyfinSource>,
-        out: cb::Sender<Msg>,
-    ) -> Self {
+    pub fn start(srcs: Srcs, out: cb::Sender<Msg>) -> Self {
+        let Srcs { radio, server, jellyfin, .. } = &srcs;
+        let (radio, server, jellyfin) = (radio.clone(), server.clone(), jellyfin.clone());
         let radio_search = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
@@ -276,7 +271,7 @@ impl Worker {
                             });
                             continue;
                         }
-                        run(&local, &radio, &podcasts, &server, &jellyfin, j, &out);
+                        run(&srcs, j, &out);
                     }
                 }
             })
@@ -303,6 +298,15 @@ fn find_stations(radio: &Arc<RadioSource>, latest: &Arc<std::sync::atomic::Atomi
         let list = radio.find(&query, 20).unwrap_or_default();
         let _ = out.send(Msg::Stations { seq, list });
     });
+}
+
+/// All music sources, for the worker.
+pub struct Srcs {
+    pub local: Arc<LocalSource>,
+    pub radio: Arc<RadioSource>,
+    pub podcasts: Arc<PodcastSource>,
+    pub server: Arc<SubsonicSource>,
+    pub jellyfin: Arc<JellyfinSource>,
 }
 
 /// Log in to a music server: Jellyfin if the address is one, else Subsonic
@@ -336,14 +340,8 @@ fn server_login(server: &SubsonicSource, jf: &JellyfinSource, url: &str, user: &
 }
 
 /// Children of a list node, from the source it belongs to.
-fn children(
-    local: &LocalSource,
-    radio: &RadioSource,
-    podcasts: &PodcastSource,
-    server: &SubsonicSource,
-    jellyfin: &JellyfinSource,
-    node: &str,
-) -> anyhow::Result<Vec<Item>> {
+fn children(s: &Srcs, node: &str) -> anyhow::Result<Vec<Item>> {
+    let Srcs { local, radio, podcasts, server, jellyfin } = s;
     if node.starts_with("jellyfin:") {
         jellyfin.children(node, Page::ALL)
     } else if node.starts_with("subsonic:") {
@@ -401,43 +399,25 @@ fn lastfm_children(local: &LocalSource, what: &str) -> anyhow::Result<Vec<Item>>
     Ok(out)
 }
 
-fn tracks_of(
-    local: &LocalSource,
-    radio: &RadioSource,
-    podcasts: &PodcastSource,
-    server: &SubsonicSource,
-    jellyfin: &JellyfinSource,
-    node: &str,
-    depth: u32,
-    out: &mut Vec<Arc<Track>>,
-) {
-    let Ok(items) = children(local, radio, podcasts, server, jellyfin, node) else { return };
+fn tracks_of(s: &Srcs, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
+    let Ok(items) = children(s, node) else { return };
     for it in items {
         match it {
             Item::Track(t) => out.push(t),
-            Item::Node(n) if depth > 0 => tracks_of(local, radio, podcasts, server, jellyfin, &n.id, depth - 1, out),
+            Item::Node(n) if depth > 0 => tracks_of(s, &n.id, depth - 1, out),
             Item::Node(_) => {}
         }
     }
 }
 
-fn run(
-    local: &LocalSource,
-    radio: &RadioSource,
-    podcasts: &Arc<PodcastSource>,
-    server: &SubsonicSource,
-    jellyfin: &JellyfinSource,
-    job: Job,
-    out: &cb::Sender<Msg>,
-) {
+fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
+    let Srcs { local, radio, podcasts, server, jellyfin } = srcs;
     let send = |m: Msg| {
         let _ = out.send(m);
     };
     let err = |e: anyhow::Error| Msg::Error(format!("{e:#}"));
     match job {
-        Job::Children { seq, node } => {
-            send(Msg::Children { seq, items: children(local, radio, podcasts, server, jellyfin, &node).map_err(|e| format!("{e:#}")) })
-        }
+        Job::Children { seq, node } => send(Msg::Children { seq, items: children(srcs, &node).map_err(|e| format!("{e:#}")) }),
         Job::Search { seq, query } => send(Msg::Search { seq, hits: local.search(&query, 50).unwrap_or_default() }),
         Job::Lyrics { track } => {
             let lyrics = local.lyrics(&track).ok().flatten();
@@ -446,7 +426,7 @@ fn run(
         }
         Job::Tracks { nodes, mut tracks, then } => {
             for n in nodes {
-                tracks_of(local, radio, podcasts, server, jellyfin, &n, 3, &mut tracks);
+                tracks_of(srcs, &n, 3, &mut tracks);
             }
             match then {
                 Then::AddToPlaylist(id) => {
@@ -629,7 +609,7 @@ fn run(
         // Podcast episode: "like" means subscribe to its show.
         Job::Like(r) if &*r.source == crate::source::podcast::ID => {
             if let Some(feed) = podcasts.feed_of(&r.id) {
-                run(local, radio, podcasts, server, jellyfin, Job::Subscribe(feed), out);
+                run(srcs, Job::Subscribe(feed), out);
             }
         }
         Job::Subscribe(feed) => match podcasts.toggle_subscription(&feed) {
@@ -659,7 +639,7 @@ fn run(
         Job::Playlists => send(Msg::Playlists(db::playlists(&local.conn()).unwrap_or_default())),
         Job::NewPlaylist { name, nodes, mut tracks } => {
             for n in nodes {
-                tracks_of(local, radio, podcasts, server, jellyfin, &n, 3, &mut tracks);
+                tracks_of(srcs, &n, 3, &mut tracks);
             }
             let res = (|| {
                 let mut c = local.conn();
