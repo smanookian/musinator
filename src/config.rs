@@ -42,6 +42,7 @@ pub struct Config {
     pub mpris: bool,
     pub sidebar_width: u16,
     /// Equalizer on/off, preset name ("Custom" = own settings), band gains in dB.
+    pub podcast_auto_download: bool,
     pub lastfm_scrobble: bool,
     pub lastfm_radio: bool,
     pub eq_on: bool,
@@ -82,6 +83,7 @@ impl Default for Config {
             save_lyrics_next: false,
             omarchy_bar: false,
             mpris: true,
+            podcast_auto_download: true,
             lastfm_scrobble: true,
             lastfm_radio: true,
             eq_on: false,
@@ -293,6 +295,13 @@ pub const SETTINGS: &[Setting] = &[
     ),
     s!("mpris", "Desktop", "Media keys (MPRIS)", "Media keys, playerctl and the Omarchy media controls.", Kind::Toggle),
     s!("notifications", "Desktop", "Notify on track change", "Desktop notification when a new song starts.", Kind::Toggle),
+    s!(
+        "podcast_auto_download",
+        "Library",
+        "Download new podcast episodes",
+        "Keep the newest episode of each show on disk, so it plays without internet.",
+        Kind::Toggle
+    ),
     s!("lastfm", "Desktop", "Last.fm account", "Log in once in the browser. Press again to log out.", Kind::Open),
     s!("lastfm_scrobble", "Desktop", "Scrobble to Last.fm", "Send the songs you hear to your Last.fm profile.", Kind::Toggle),
     s!(
@@ -345,6 +354,7 @@ impl Config {
             "mpris" => on(self.mpris),
             "lastfm" => crate::lastfm::user().map(|u| format!("Logged in as {u}")).unwrap_or_else(|| "Not connected".into()),
             "lastfm_scrobble" => on(self.lastfm_scrobble),
+            "podcast_auto_download" => on(self.podcast_auto_download),
             "lastfm_radio" => on(self.lastfm_radio),
             "notifications" => on(self.notifications),
             _ => String::new(),
@@ -378,6 +388,7 @@ impl Config {
             "omarchy_bar" => &mut self.omarchy_bar,
             "mpris" => &mut self.mpris,
             "lastfm_scrobble" => &mut self.lastfm_scrobble,
+            "podcast_auto_download" => &mut self.podcast_auto_download,
             "lastfm_radio" => &mut self.lastfm_radio,
             "notifications" => &mut self.notifications,
             _ => return None,

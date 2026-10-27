@@ -326,6 +326,12 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
             (ListKind::Queue, _) => "Queue is empty · a adds songs".to_string(),
             _ if v.all.is_some() => "Nothing matches the filter".into(),
             _ if v.node == super::RADIO_FIND => "Press enter to search stations by name, genre or country".into(),
+            _ if v.node == super::PODCAST_FIND => "Press enter to find a podcast by name, or add one by its feed address".into(),
+            _ if v.node == crate::source::podcast::SHOWS => {
+                format!("No shows yet · Find a podcast, then {} on it subscribes", app.keys.hint(Action::Like))
+            }
+            _ if v.node == crate::source::podcast::NEW => "No new episodes".into(),
+            _ if v.node.starts_with("podcast:") => "Nothing found".into(),
             _ if v.node == super::LASTFM_PROFILE => "Press enter to open your Last.fm profile in the browser".into(),
             _ if v.node == "lastfm:none" => "This one is not in your library".into(),
             _ if v.node.starts_with("lastfm:") => "Nothing on Last.fm yet".into(),
@@ -431,6 +437,7 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
         Item::Node(n) => {
             let right_txt = match (n.kind, n.count) {
                 (_, Some(c)) if n.id.starts_with("radio:") => format!("{c} stations"),
+                (_, Some(c)) if n.id.starts_with("podcast:") => format!("{c} new"),
                 (NodeKind::Album, Some(c)) => format!("{c} songs"),
                 (NodeKind::Artist, Some(c)) => format!("{c} songs"),
                 (_, Some(c)) => c.to_string(),

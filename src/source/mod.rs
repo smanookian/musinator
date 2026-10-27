@@ -8,6 +8,7 @@
 //! worker threads, never from the UI thread.
 
 pub mod local;
+pub mod podcast;
 pub mod radio;
 
 use std::collections::HashMap;

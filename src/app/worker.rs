@@ -9,6 +9,7 @@ use crossbeam_channel as cb;
 use crate::library::{db, m3u8};
 use crate::model::{Track, TrackRef};
 use crate::source::local::LocalSource;
+use crate::source::podcast::PodcastSource;
 use crate::source::radio::RadioSource;
 use crate::source::{Item, Lyrics, Page, SearchHits, Source};
 
@@ -68,6 +69,10 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    /// Subscribe to / unsubscribe from a podcast feed.
+    Subscribe(String),
+    /// Download an episode, or delete its download.
+    Download(String),
     /// Stations for the main search (runs on its own thread).
     FindStations {
         seq: u64,
@@ -137,6 +142,11 @@ pub enum Job {
 }
 
 pub enum Msg {
+    Subscribed {
+        title: String,
+        on: bool,
+    },
+    Downloaded(String),
     Stations {
         seq: u64,
         list: Vec<Arc<Track>>,
@@ -196,7 +206,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn start(local: Arc<LocalSource>, radio: Arc<RadioSource>, out: cb::Sender<Msg>) -> Self {
+    pub fn start(local: Arc<LocalSource>, radio: Arc<RadioSource>, podcasts: Arc<PodcastSource>, out: cb::Sender<Msg>) -> Self {
         let radio_search = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
@@ -215,7 +225,7 @@ impl Worker {
                             find_stations(&radio, &radio_search, seq, query, &out);
                             continue;
                         }
-                        run(&local, &radio, j, &out);
+                        run(&local, &radio, &podcasts, j, &out);
                     }
                 }
             })
@@ -245,8 +255,10 @@ fn find_stations(radio: &Arc<RadioSource>, latest: &Arc<std::sync::atomic::Atomi
 }
 
 /// Children of a list node, from the source it belongs to.
-fn children(local: &LocalSource, radio: &RadioSource, node: &str) -> anyhow::Result<Vec<Item>> {
-    if node.starts_with("radio:") {
+fn children(local: &LocalSource, radio: &RadioSource, podcasts: &PodcastSource, node: &str) -> anyhow::Result<Vec<Item>> {
+    if node.starts_with("podcast:") {
+        podcasts.children(node, Page::ALL)
+    } else if node.starts_with("radio:") {
         radio.children(node, Page::ALL)
     } else if let Some(what) = node.strip_prefix("lastfm:") {
         lastfm_children(local, what)
@@ -297,24 +309,26 @@ fn lastfm_children(local: &LocalSource, what: &str) -> anyhow::Result<Vec<Item>>
     Ok(out)
 }
 
-fn tracks_of(local: &LocalSource, radio: &RadioSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
-    let Ok(items) = children(local, radio, node) else { return };
+fn tracks_of(local: &LocalSource, radio: &RadioSource, podcasts: &PodcastSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
+    let Ok(items) = children(local, radio, podcasts, node) else { return };
     for it in items {
         match it {
             Item::Track(t) => out.push(t),
-            Item::Node(n) if depth > 0 => tracks_of(local, radio, &n.id, depth - 1, out),
+            Item::Node(n) if depth > 0 => tracks_of(local, radio, podcasts, &n.id, depth - 1, out),
             Item::Node(_) => {}
         }
     }
 }
 
-fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>) {
+fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, job: Job, out: &cb::Sender<Msg>) {
     let send = |m: Msg| {
         let _ = out.send(m);
     };
     let err = |e: anyhow::Error| Msg::Error(format!("{e:#}"));
     match job {
-        Job::Children { seq, node } => send(Msg::Children { seq, items: children(local, radio, &node).map_err(|e| format!("{e:#}")) }),
+        Job::Children { seq, node } => {
+            send(Msg::Children { seq, items: children(local, radio, podcasts, &node).map_err(|e| format!("{e:#}")) })
+        }
         Job::Search { seq, query } => send(Msg::Search { seq, hits: local.search(&query, 50).unwrap_or_default() }),
         Job::Lyrics { track } => {
             let lyrics = local.lyrics(&track).ok().flatten();
@@ -323,7 +337,7 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
         }
         Job::Tracks { nodes, mut tracks, then } => {
             for n in nodes {
-                tracks_of(local, radio, &n, 3, &mut tracks);
+                tracks_of(local, radio, podcasts, &n, 3, &mut tracks);
             }
             match then {
                 Then::AddToPlaylist(id) => {
@@ -472,6 +486,10 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
                         // Only stations we still know (title shows); others are dropped.
                         return radio.track(&r).ok().filter(|t| !t.title.is_empty()).map(Arc::new);
                     }
+                    if i.source.as_deref() == Some(crate::source::podcast::ID) {
+                        let r = TrackRef { source: podcasts.id().clone(), id: i.path.clone() };
+                        return podcasts.track(&r).ok().map(Arc::new);
+                    }
                     if i.source.is_some() || !std::path::Path::new(&i.path).exists() {
                         return None;
                     }
@@ -491,6 +509,27 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
             });
         }
         Job::AddStream(url) => send(Msg::StreamAdded(radio.add_custom(&url).map_err(|e| format!("{e:#}")))),
+        // Podcast episode: "like" means subscribe to its show.
+        Job::Like(r) if &*r.source == crate::source::podcast::ID => {
+            if let Some(feed) = podcasts.feed_of(&r.id) {
+                run(local, radio, podcasts, Job::Subscribe(feed), out);
+            }
+        }
+        Job::Subscribe(feed) => match podcasts.toggle_subscription(&feed) {
+            Ok((title, on)) => send(Msg::Subscribed { title, on }),
+            Err(e) => send(err(e)),
+        },
+        Job::Download(id) => {
+            send(Msg::Info("Downloading episode…".into()));
+            let (p, out) = (podcasts.clone(), out.clone());
+            std::thread::spawn(move || {
+                let _ = out.send(match p.toggle_download(&id) {
+                    Ok((t, true)) => Msg::Downloaded(format!("Downloaded: {t}")),
+                    Ok((t, false)) => Msg::Downloaded(format!("Download removed: {t}")),
+                    Err(e) => Msg::Error(format!("Download failed: {e:#}")),
+                });
+            });
+        }
         // Radio: "like" means favorite station.
         Job::Like(r) if &*r.source == crate::source::radio::ID => match radio.toggle_fav(&r.id) {
             Ok(on) => send(Msg::RadioFav(on)),
@@ -503,7 +542,7 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
         Job::Playlists => send(Msg::Playlists(db::playlists(&local.conn()).unwrap_or_default())),
         Job::NewPlaylist { name, nodes, mut tracks } => {
             for n in nodes {
-                tracks_of(local, radio, &n, 3, &mut tracks);
+                tracks_of(local, radio, podcasts, &n, 3, &mut tracks);
             }
             let res = (|| {
                 let mut c = local.conn();

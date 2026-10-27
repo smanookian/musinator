@@ -182,6 +182,9 @@ pub struct App {
     on_air: Option<(Arc<Track>, Instant)>,
     /// The song `L` was pressed on (to love it on Last.fm when the like is saved).
     last_liked: Option<Arc<Track>>,
+    pub podcasts: Arc<crate::source::podcast::PodcastSource>,
+    /// When the episode position was last saved.
+    podcast_saved: Instant,
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
     edited: Vec<crate::model::TrackRef>,
     pub art_file: Option<std::path::PathBuf>,
@@ -286,6 +289,32 @@ impl App {
     }
 
     /// Last.fm "now playing", and scrobbles for radio songs when the next one starts.
+    /// An episode started: jump to where you stopped last time.
+    fn podcast_resume(&mut self, t: &Track) {
+        if !is_podcast(t) {
+            return;
+        }
+        let (pos, played) = self.podcasts.position(&t.tref().id);
+        if !played && pos > 10_000 && self.engine.position() < Duration::from_secs(5) {
+            self.engine.send(Cmd::SeekTo(Duration::from_millis(pos)));
+            self.info(format!("Continuing at {}", crate::model::fmt_time(pos)));
+        }
+        self.podcast_saved = Instant::now();
+    }
+
+    /// Save where you are in an episode (every 10 s while playing, and on pause/quit).
+    fn podcast_save(&mut self, force: bool) {
+        let snap = self.now();
+        let Some(t) = snap.track.filter(|t| is_podcast(t)) else { return };
+        if !force && (snap.state != PlayState::Playing || self.podcast_saved.elapsed() < Duration::from_secs(10)) {
+            return;
+        }
+        self.podcast_saved = Instant::now();
+        let ms = self.engine.position().as_millis() as u64;
+        // A tiny write; done here so it also happens right before quitting.
+        self.podcasts.save_position(&t.tref().id, ms, t.duration_ms.unwrap_or(0));
+    }
+
     fn lastfm_track(&mut self, t: Option<&Arc<Track>>) {
         if let Some((prev, since)) = self.on_air.take()
             && t.is_some_and(|t| t.r == prev.r && (t.title != prev.title || t.artist != prev.artist))
@@ -320,6 +349,9 @@ impl App {
             return None;
         }
         let t = self.now().track?;
+        if is_podcast(&t) {
+            return None;
+        }
         let live = draw::is_live(&t);
         let counted = if live {
             if !t.on_air || !self.cfg.lastfm_radio {
@@ -443,6 +475,13 @@ impl App {
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
+        s.push(Side::Blank);
+        s.push(Side::Header("Podcasts"));
+        for (l, n) in
+            [("New episodes", crate::source::podcast::NEW), ("Shows", crate::source::podcast::SHOWS), ("Find a podcast…", PODCAST_FIND)]
+        {
+            s.push(Side::Node { label: l.into(), node: n.into() });
+        }
         if self.lastfm_user.is_some() {
             s.push(Side::Blank);
             s.push(Side::Header("Last.fm"));
@@ -506,7 +545,7 @@ impl App {
                 v
             }
             // Searching needs typing: show a hint until enter is pressed.
-            Side::Node { node, label } if node == RADIO_FIND || node == RADIO_ADD || node == LASTFM_PROFILE => {
+            Side::Node { node, label } if node == RADIO_FIND || node == RADIO_ADD || node == LASTFM_PROFILE || node == PODCAST_FIND => {
                 let mut v = ListView::new(label.trim_end_matches('…').into(), node, ListKind::Node, seq);
                 v.loading = false;
                 v
@@ -518,7 +557,13 @@ impl App {
         let node = view.node.clone();
         let kind = view.kind;
         self.lists = vec![view];
-        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND && node != RADIO_ADD && node != LASTFM_PROFILE {
+        if kind == ListKind::Node
+            && !node.is_empty()
+            && node != RADIO_FIND
+            && node != RADIO_ADD
+            && node != LASTFM_PROFILE
+            && node != PODCAST_FIND
+        {
             self.worker.send(Job::Children { seq, node });
         }
         if kind == ListKind::Queue {
@@ -714,6 +759,9 @@ impl App {
                 Some(Side::NowPlaying) if self.now().track.is_some() => self.screen = Screen::NowPlaying,
                 Some(Side::Node { node, .. }) if node == RADIO_FIND => {
                     self.open_search(true);
+                }
+                Some(Side::Node { node, .. }) if node == PODCAST_FIND => {
+                    self.dialog = Some(Dialog::input("Find a podcast", "Name or feed address", String::new(), dialogs::InputFor::Podcast));
                 }
                 Some(Side::Node { node, .. }) if node == LASTFM_PROFILE => {
                     if let Some(u) = crate::lastfm::profile_url() {
@@ -1018,6 +1066,12 @@ impl App {
             Action::FullLyrics => self.lyrics_full = !self.lyrics_full,
             Action::SleepTimer => self.dialog = Some(Dialog::sleep(self)),
             Action::OpenVideo => self.open_video(),
+            Action::Download => match self.targets().and_then(|(_, t, _)| t.into_iter().next()) {
+                Some(t) if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::podcast::ID) => {
+                    self.send_job(Job::Download(t.tref().id.clone()))
+                }
+                _ => self.info("Select a podcast episode to download"),
+            },
             Action::Filter => {
                 // Not in the queue or playlists: moving and removing there needs the full list.
                 let ok =
@@ -1062,6 +1116,12 @@ impl App {
                     Some(n) => format!("{} {}", stars(n), track.display_title()),
                     None => "Rating cleared".into(),
                 });
+            }
+            Action::Like if matches!(self.selected_item(), Some(Item::Node(n)) if n.id.starts_with(crate::source::podcast::FEED)) => {
+                if let Some(Item::Node(n)) = self.selected_item() {
+                    self.info("Checking the feed…");
+                    self.send_job(Job::Subscribe(n.id[crate::source::podcast::FEED.len()..].to_string()));
+                }
             }
             Action::Like => {
                 if let Some((_, tracks, _)) = self.targets()
@@ -1264,6 +1324,9 @@ impl App {
             EngineEvent::Track(t) => {
                 self.lastfm_track(t.as_ref());
                 if let Some(t) = &t {
+                    self.podcast_resume(t);
+                }
+                if let Some(t) = &t {
                     if let Some(r) = t.r.clone()
                         && self.lyrics.as_ref().is_none_or(|(lr, _)| *lr != r)
                     {
@@ -1289,6 +1352,7 @@ impl App {
                 // Radio pause is a stop: the song on air was not heard to its end.
                 if s != PlayState::Playing {
                     self.on_air = None;
+                    self.podcast_save(true);
                 }
                 if s == PlayState::Stopped && matches!(self.sleep, Some(Sleep::Track | Sleep::Album)) {
                     self.sleep = None;
@@ -1408,6 +1472,18 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::Subscribed { title, on } => {
+                self.info(if on { format!("Subscribed to {title}") } else { format!("Unsubscribed from {title}") });
+                self.reload_lists_matching(crate::source::podcast::SHOWS);
+                self.reload_lists_matching(crate::source::podcast::NEW);
+            }
+            Msg::Downloaded(s) => {
+                self.info(s);
+                let nodes: Vec<String> = self.lists.iter().filter(|v| v.node.starts_with("podcast:")).map(|v| v.node.clone()).collect();
+                for n in nodes {
+                    self.reload_lists_matching(&n);
+                }
+            }
             Msg::LastfmLogin(r) => match r {
                 Ok(u) => {
                     self.info(format!("Last.fm: logged in as {u}"));
@@ -1613,6 +1689,7 @@ impl App {
     }
 
     fn on_tick(&mut self) {
+        self.podcast_save(false);
         if let Some(Sleep::At(t)) = self.sleep
             && Instant::now() >= t
         {
@@ -1736,8 +1813,15 @@ fn item_key(i: &Item) -> String {
     }
 }
 
+fn is_podcast(t: &Track) -> bool {
+    t.r.as_ref().is_some_and(|r| &*r.source == crate::source::podcast::ID)
+}
+
 /// What Last.fm gets for a song; None without artist or title.
 fn lastfm_play(t: &Track, at: i64) -> Option<crate::lastfm::Play> {
+    if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::podcast::ID) {
+        return None;
+    }
     let live = draw::is_live(t);
     (!t.artist.is_empty() && !t.title.is_empty()).then(|| crate::lastfm::Play {
         artist: t.artist.clone(),
@@ -1754,6 +1838,8 @@ fn lastfm_play(t: &Track, at: i64) -> Option<crate::lastfm::Play> {
 pub const RADIO_FIND: &str = "radio:find";
 /// Sidebar entry that asks for a stream address.
 pub const RADIO_ADD: &str = "radio:add";
+/// Sidebar entry that asks for a podcast name or feed address.
+pub const PODCAST_FIND: &str = "podcast:find";
 /// Sidebar entry that opens the Last.fm profile in the browser.
 pub const LASTFM_PROFILE: &str = "lastfm:profile";
 
@@ -1771,6 +1857,13 @@ pub fn run(cfg: Config) -> Result<()> {
     sources.add(local.clone());
     let radio = Arc::new(crate::source::radio::RadioSource::open(&crate::config::data_dir().join("radio.db"))?);
     sources.add(radio.clone());
+    let podcasts = Arc::new(crate::source::podcast::PodcastSource::open(
+        &crate::config::data_dir().join("podcasts.db"),
+        crate::config::data_dir().join("podcasts"),
+    )?);
+    podcasts.auto_download.store(cfg.podcast_auto_download, std::sync::atomic::Ordering::Relaxed);
+    podcasts.start_refresher();
+    sources.add(podcasts.clone());
     let sources = Arc::new(sources);
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
     engine.set_eq(cfg.eq_on, &cfg.eq_bands);
@@ -1808,7 +1901,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker = Worker::start(local, radio, w_tx);
+    let worker = Worker::start(local, radio, podcasts.clone(), w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
@@ -1843,6 +1936,8 @@ pub fn run(cfg: Config) -> Result<()> {
         lastfm_user: crate::lastfm::user(),
         on_air: None,
         last_liked: None,
+        podcasts,
+        podcast_saved: Instant::now(),
         sources,
         worker,
         art,
@@ -2046,7 +2141,8 @@ impl App {
         })
     }
 
-    fn save_session(&self) {
+    fn save_session(&mut self) {
+        self.podcast_save(true);
         if !self.cfg.resume {
             session::clear();
             return;

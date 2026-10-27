@@ -58,6 +58,7 @@ pub enum Action {
     FetchLyrics,
     FullLyrics,
     MiniMode,
+    Download,
     Filter,
     OpenVideo,
     LyricsLater,
@@ -120,6 +121,7 @@ actions! {
     RenamePlaylist "rename_playlist" "Library" "Rename playlist" ["R"];
     ExportPlaylist "export_playlist" "Library" "Export playlist (.m3u8)" ["E"];
     GridView "grid" "Library" "Album grid on / off" ["o"];
+    Download "download" "Library" "Download podcast episode (again: delete it)" ["D"];
     Filter "filter" "Library" "Filter this list (type to narrow it)" ["ctrl+f"];
     Rescan "rescan" "Library" "Rescan music folders" ["ctrl+r"];
     ToggleScreen "toggle_screen" "Screens" "Library ↔ Now Playing" ["z"];

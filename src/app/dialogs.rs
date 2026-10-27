@@ -48,6 +48,7 @@ pub enum InputFor {
     AddFolder,
     Import,
     RadioUrl,
+    Podcast,
 }
 
 pub enum Dialog {
@@ -646,6 +647,11 @@ impl Dialog {
                         InputFor::RenamePlaylist(id) => app.send_job(Job::RenamePlaylist { id, name: v }),
                         InputFor::Export(id) => app.send_job(Job::Export { id, path: crate::config::expand(&v) }),
                         InputFor::Import => app.send_job(Job::Import { path: crate::config::expand(&v) }),
+                        InputFor::Podcast if v.starts_with("http://") || v.starts_with("https://") => {
+                            app.info("Checking the feed…");
+                            app.send_job(Job::Subscribe(v));
+                        }
+                        InputFor::Podcast => app.drill(format!("Podcasts · {v}"), format!("{}{v}", crate::source::podcast::SEARCH)),
                         InputFor::RadioUrl => {
                             app.info("Checking the address…");
                             app.send_job(Job::AddStream(v));
@@ -1435,6 +1441,7 @@ fn change(app: &mut App, key: &str, dir: i32) -> bool {
 
 fn apply(app: &mut App, key: &str) {
     match key {
+        "podcast_auto_download" => app.podcasts.auto_download.store(app.cfg.podcast_auto_download, std::sync::atomic::Ordering::Relaxed),
         "rg_mode" | "rg_preamp" | "rg_fallback" | "prevent_clip" => app.engine.send(Cmd::Gain(app.cfg.gain())),
         "images" => app.restart_images(),
         "album_grid" => app.grid_pics.clear(),
