@@ -131,7 +131,7 @@ pub fn parse_feed(xml: &str) -> Result<Feed> {
 }
 
 fn fetch_feed(url: &str) -> Result<Feed> {
-    let mut resp = agent(20).get(url).header("User-Agent", UA).call().context("the feed can't be reached")?;
+    let mut resp = agent(20).get(url).header("User-Agent", UA).call().map_err(|e| super::net_error(e, "the feed"))?;
     if !resp.status().is_success() {
         bail!("the feed answered {}", resp.status());
     }
@@ -169,7 +169,7 @@ impl HttpFile {
         if from > 0 {
             req = req.header("Range", format!("bytes={from}-"));
         }
-        let resp = req.call().context("the episode can't be reached")?;
+        let resp = req.call().map_err(|e| super::net_error(e, "the episode"))?;
         if !resp.status().is_success() {
             bail!("the episode answered {}", resp.status());
         }
@@ -377,7 +377,7 @@ impl PodcastSource {
             .get(url)
             .header("User-Agent", UA)
             .call()
-            .context("the episode can't be reached")?;
+            .map_err(|e| super::net_error(e, "the episode"))?;
         if !resp.status().is_success() {
             bail!("the episode answered {}", resp.status());
         }
@@ -502,7 +502,7 @@ impl PodcastSource {
             .query("limit", "40")
             .query("term", q)
             .call()
-            .context("the podcast directory can't be reached")?;
+            .map_err(|e| super::net_error(e, "the podcast directory"))?;
         let v: Value = serde_json::from_str(&resp.body_mut().read_to_string()?)?;
         Ok(v["results"]
             .as_array()

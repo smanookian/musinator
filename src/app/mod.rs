@@ -186,6 +186,7 @@ pub struct App {
     /// Total size of podcast downloads ("1.2 GB"), updated when the Downloads list loads.
     pub downloads_label: String,
     pub server: Arc<crate::source::subsonic::SubsonicSource>,
+    pub jellyfin: Arc<crate::source::jellyfin::JellyfinSource>,
     /// Music server results for the main search.
     pub server_hits: Vec<Item>,
     /// When the episode position was last saved.
@@ -347,6 +348,18 @@ impl App {
         }
     }
 
+    /// The music server lists for the sidebar (Navidrome/Subsonic or Jellyfin), if one is set up.
+    pub fn server_nodes(&self) -> Option<[(&'static str, &'static str); 4]> {
+        use crate::source::{jellyfin as jf, subsonic as ss};
+        if self.server.login.lock().is_some() {
+            Some([("Artists", ss::ARTISTS), ("Albums", ss::ALBUMS), ("Recently added", ss::NEWEST), ("Playlists", ss::PLAYLISTS)])
+        } else if self.jellyfin.login.lock().is_some() {
+            Some([("Artists", jf::ARTISTS), ("Albums", jf::ALBUMS), ("Recently added", jf::NEWEST), ("Playlists", jf::PLAYLISTS)])
+        } else {
+            None
+        }
+    }
+
     /// Last.fm part of the info line: "last.fm", "last.fm ✓" once the song counts,
     /// plus waiting scrobbles. None when not logged in or off.
     pub fn lastfm_status(&self) -> Option<(String, bool)> {
@@ -480,15 +493,10 @@ impl App {
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
-        if self.server.login.lock().is_some() {
+        if let Some(nodes) = self.server_nodes() {
             s.push(Side::Blank);
             s.push(Side::Header("Music server"));
-            for (l, n) in [
-                ("Artists", crate::source::subsonic::ARTISTS),
-                ("Albums", crate::source::subsonic::ALBUMS),
-                ("Recently added", crate::source::subsonic::NEWEST),
-                ("Playlists", crate::source::subsonic::PLAYLISTS),
-            ] {
+            for (l, n) in nodes {
                 s.push(Side::Node { label: l.into(), node: n.into() });
             }
         }
@@ -1396,8 +1404,8 @@ impl App {
                 if listened >= need
                     && let Some(r) = track.r.clone()
                 {
-                    if &*r.source == crate::source::subsonic::ID {
-                        self.worker.send(Job::ServerScrobble(r.id.clone()));
+                    if &*r.source == crate::source::subsonic::ID || &*r.source == crate::source::jellyfin::ID {
+                        self.worker.send(Job::ServerScrobble(r.clone()));
                     }
                     self.worker.send(Job::RecordPlay(r));
                 }
@@ -1816,7 +1824,7 @@ impl App {
             self.worker.send(Job::FindStations { seq, query: q.trim().to_string() });
         }
         self.server_hits.clear();
-        if !self.stations_only && q.trim().chars().count() >= 2 && self.server.login.lock().is_some() {
+        if !self.stations_only && q.trim().chars().count() >= 2 && self.server_nodes().is_some() {
             self.worker.send(Job::FindServer { seq, query: q.trim().to_string() });
         }
         if !self.stations_only {
@@ -1909,6 +1917,8 @@ pub fn run(cfg: Config) -> Result<()> {
     sources.add(podcasts.clone());
     let server = Arc::new(crate::source::subsonic::SubsonicSource::new());
     sources.add(server.clone());
+    let jellyfin = Arc::new(crate::source::jellyfin::JellyfinSource::default());
+    sources.add(jellyfin.clone());
     let sources = Arc::new(sources);
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
     engine.set_eq(cfg.eq_on, &cfg.eq_bands);
@@ -1946,7 +1956,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker = Worker::start(local, radio, podcasts.clone(), server.clone(), w_tx);
+    let worker = Worker::start(local, radio, podcasts.clone(), server.clone(), jellyfin.clone(), w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
@@ -1984,6 +1994,7 @@ pub fn run(cfg: Config) -> Result<()> {
         podcasts,
         downloads_label: String::new(),
         server,
+        jellyfin,
         server_hits: Vec::new(),
         podcast_saved: Instant::now(),
         sources,

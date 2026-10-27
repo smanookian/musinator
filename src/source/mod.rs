@@ -7,6 +7,7 @@
 //! All `Source` methods may block (disk, network). They are only called from
 //! worker threads, never from the UI thread.
 
+pub mod jellyfin;
 pub mod local;
 pub mod podcast;
 pub mod radio;
@@ -100,6 +101,30 @@ impl Lyrics {
     pub fn is_empty(&self) -> bool {
         self.synced.is_empty() && self.plain.as_deref().is_none_or(|p| p.trim().is_empty())
     }
+}
+
+/// A network failure in plain words: what happened and what to do.
+/// `what` is e.g. "the server", "the station".
+pub fn net_error(e: ureq::Error, what: &str) -> anyhow::Error {
+    let io_kind = match &e {
+        ureq::Error::Io(io) => Some(io.kind()),
+        _ => None,
+    };
+    let lookup = e.to_string().contains("lookup address");
+    let msg = match (&e, io_kind) {
+        (ureq::Error::HostNotFound, _) | (_, _) if lookup || matches!(e, ureq::Error::HostNotFound) => {
+            format!("{what} can't be found: check the address, and that you are online")
+        }
+        (ureq::Error::ConnectionFailed, _) | (_, Some(std::io::ErrorKind::ConnectionRefused)) => {
+            format!("nothing answers at this address: check it, and that {what} is running")
+        }
+        (ureq::Error::Timeout(_), _) | (_, Some(std::io::ErrorKind::TimedOut)) => {
+            format!("{what} doesn't answer: check your internet connection")
+        }
+        (ureq::Error::Tls(_), _) => format!("{what} has a problem with its secure connection (https)"),
+        _ => format!("{what} can't be reached ({e})"),
+    };
+    anyhow::anyhow!(msg)
 }
 
 /// One place music comes from.

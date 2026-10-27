@@ -100,7 +100,7 @@ pub fn save_login(l: Option<&Login>) -> Result<()> {
 fn get(l: &Login, method: &str, extra: &[(&str, &str)]) -> Result<Value> {
     let agent: ureq::Agent =
         ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(20))).http_status_as_error(false).build().into();
-    let mut resp = agent.get(&l.endpoint(method, extra)).call().context("the server can't be reached")?;
+    let mut resp = agent.get(&l.endpoint(method, extra)).call().map_err(|e| super::net_error(e, "the server"))?;
     if !resp.status().is_success() {
         bail!("the server answered {}", resp.status());
     }

@@ -132,7 +132,7 @@ fn api(path: &str, query: &[(&str, String)]) -> Result<Value> {
         for (k, v) in query {
             req = req.query(*k, v);
         }
-        let body = req.call().map_err(anyhow::Error::from).and_then(|mut r| {
+        let body = req.call().map_err(|e| super::net_error(e, "radio-browser.info")).and_then(|mut r| {
             if !r.status().is_success() {
                 bail!("radio-browser.info answered {}", r.status());
             }
@@ -143,7 +143,7 @@ fn api(path: &str, query: &[(&str, String)]) -> Result<Value> {
                 MIRROR.store(m, Relaxed);
                 return Ok(v);
             }
-            Err(e) => last = e.context("radio-browser.info can't be reached"),
+            Err(e) => last = e,
         }
     }
     Err(last)
@@ -245,8 +245,12 @@ impl RadioSource {
             bail!("The address must start with http:// or https://");
         }
         let real = resolve_playlist(url)?;
-        let resp =
-            agent(10).get(&real).header("User-Agent", UA).header("Icy-MetaData", "1").call().context("the address can't be reached")?;
+        let resp = agent(10)
+            .get(&real)
+            .header("User-Agent", UA)
+            .header("Icy-MetaData", "1")
+            .call()
+            .map_err(|e| super::net_error(e, "the address"))?;
         if !resp.status().is_success() {
             bail!("the address answered {}", resp.status());
         }
@@ -400,7 +404,7 @@ fn resolve_playlist(url: &str) -> Result<String> {
     if !(path.ends_with(".pls") || path.ends_with(".m3u")) {
         return Ok(url.to_string());
     }
-    let mut resp = agent(10).get(url).header("User-Agent", UA).call().context("the address can't be reached")?;
+    let mut resp = agent(10).get(url).header("User-Agent", UA).call().map_err(|e| super::net_error(e, "the address"))?;
     let text = resp.body_mut().with_config().limit(256 << 10).read_to_string()?;
     playlist_entry(&text).context("no stream address in this playlist")
 }
@@ -494,7 +498,8 @@ impl RadioStream {
             .http_status_as_error(false)
             .build()
             .into();
-        let resp = agent.get(url).header("User-Agent", UA).header("Icy-MetaData", "1").call().context("the station can't be reached")?;
+        let resp =
+            agent.get(url).header("User-Agent", UA).header("Icy-MetaData", "1").call().map_err(|e| super::net_error(e, "the station"))?;
         if !resp.status().is_success() {
             bail!("the station answered {}", resp.status());
         }

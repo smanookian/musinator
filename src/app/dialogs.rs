@@ -659,7 +659,7 @@ impl Dialog {
                         }
                         InputFor::ServerPass(url, user) => {
                             app.info("Connecting to the music server…");
-                            app.send_job(Job::ServerLogin(crate::source::subsonic::Login::new(&url, &user, &v)));
+                            app.send_job(Job::ServerLogin { url, user, password: v });
                         }
                         InputFor::Podcast if v.starts_with("http://") || v.starts_with("https://") => {
                             app.info("Checking the feed…");
@@ -1377,8 +1377,12 @@ fn flat_hits(app: &App) -> Vec<Item> {
 
 fn section_of(i: &Item) -> &'static str {
     match i {
-        Item::Node(n) if n.id.starts_with("subsonic:") => "On your music server",
-        Item::Track(t) if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::subsonic::ID) => "On your music server",
+        Item::Node(n) if n.id.starts_with("subsonic:") || n.id.starts_with("jellyfin:") => "On your music server",
+        Item::Track(t)
+            if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::subsonic::ID || &*r.source == crate::source::jellyfin::ID) =>
+        {
+            "On your music server"
+        }
         Item::Track(t) if super::draw::is_live(t) => "Stations",
         Item::Track(_) => "Songs",
         Item::Node(n) => match n.kind {
@@ -1501,10 +1505,11 @@ fn open_setting(app: &mut App, key: &str) -> bool {
         "music_folders" => app.dialog = Some(Dialog::Folders { cursor: 0, changed: false }),
         "import_playlist" => app.dialog = Some(Dialog::input("Import playlist", "File", "~/".into(), InputFor::Import)),
         "server" => {
-            let old = app.server.login.lock().take();
-            if let Some(l) = old {
+            let old = app.server.login.lock().take().map(|l| l.label()).or_else(|| app.jellyfin.login.lock().take().map(|l| l.label()));
+            if let Some(label) = old {
                 let _ = crate::source::subsonic::save_login(None);
-                app.info(format!("Music server disconnected ({})", l.label()));
+                let _ = crate::source::jellyfin::save_login(None);
+                app.info(format!("Music server disconnected ({label})"));
                 app.rebuild_side();
                 return false;
             }
