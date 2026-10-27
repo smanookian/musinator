@@ -251,6 +251,12 @@ fn sidebar(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn list_hints(app: &App) -> String {
+    let h = list_hints_inner(app);
+    // Inside a drilled-down list: say how to get back.
+    if app.lists.len() > 1 { format!("{} back  {h}", app.keys.hint(Action::Back)) } else { h }
+}
+
+fn list_hints_inner(app: &App) -> String {
     let Some(v) = app.list() else { return String::new() };
     if v.kind == ListKind::Queue {
         return hints(
@@ -280,9 +286,18 @@ fn list_hints(app: &App) -> String {
 
 fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     let focused = app.focus == Focus::List;
-    let title = app.list().map(|v| v.title.clone()).unwrap_or_default();
+    let mut title = app.list().map(|v| v.title.clone()).unwrap_or_default();
+    let can_back = app.lists.len() > 1;
+    if can_back {
+        title = format!("‹ {title}");
+    }
     let h = list_hints(app);
     let inner = pane(f, app, area, &title, &h, focused);
+    if can_back && inner.y > 0 {
+        // Clicking the title goes back.
+        let w = (title.width() as u16 + 1).min(inner.width);
+        super::clicks::add(Rect { x: inner.x, y: inner.y - 1, width: w, height: 1 }, super::clicks::Click::Act(Action::Back));
+    }
     app.hit.list = inner;
     let t = app.theme.clone();
     let playing = app.now().track.and_then(|t| t.r.clone());

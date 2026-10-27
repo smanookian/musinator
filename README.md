@@ -59,6 +59,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 
 | Key | Action |
 |-----|--------|
+| `esc` / `backspace` | back to the previous list (or click the `‹` title) |
 | `space` | play / pause |
 | `enter` | play selected / open |
 | `n` / `p` | next / previous |
