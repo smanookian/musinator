@@ -47,7 +47,6 @@ pub enum InputFor {
     Export(i64),
     AddFolder,
     Import,
-    RadioSearch,
     RadioUrl,
 }
 
@@ -651,7 +650,6 @@ impl Dialog {
                             app.info("Checking the address…");
                             app.send_job(Job::AddStream(v));
                         }
-                        InputFor::RadioSearch => app.drill(format!("Radio · {v}"), format!("{}{v}", crate::source::radio::SEARCH)),
                         InputFor::AddFolder => {
                             let p = crate::config::expand(&v);
                             if !p.is_dir() {
@@ -1031,9 +1029,14 @@ impl Dialog {
                 );
                 let hits = flat_hits(app);
                 let list = Rect { x: inner.x + 1, y: inner.y + 3, width: inner.width - 2, height: inner.height.saturating_sub(5) };
+                let what = if app.stations_only {
+                    "Type a station name, genre or country"
+                } else {
+                    "Type to search artists, albums, songs, playlists and radio stations"
+                };
                 if input.trim().is_empty() {
-                    put(f.buffer_mut(), list.x + 2, list.y, "Type to search artists, albums, songs and playlists", list.width - 2, muted);
-                } else if hits.is_empty() {
+                    put(f.buffer_mut(), list.x + 2, list.y, what, list.width - 2, muted);
+                } else if hits.is_empty() && !app.stations_busy {
                     put(f.buffer_mut(), list.x + 2, list.y, "No matches", list.width - 2, muted);
                 }
                 // Rows with section headers.
@@ -1046,6 +1049,9 @@ impl Dialog {
                         last = sec;
                     }
                     rows.push((Some(i), String::new()));
+                }
+                if app.stations_busy {
+                    rows.push((None, "Stations · searching…".to_string()));
                 }
                 let cur_row = rows.iter().position(|r| r.0 == Some(*cursor)).unwrap_or(0);
                 let n = list.height as usize;
@@ -1064,6 +1070,9 @@ impl Dialog {
                         Some(i) => {
                             let (title, right) = hit_text(&hits[*i]);
                             let sel = *i == *cursor;
+                            // Leave room for the right-hand text.
+                            let rw = (right.width() as u16).min(list.width / 2);
+                            let title = super::draw::fit(&title, list.width.saturating_sub(rw + 6) as usize);
                             sel_row(f, app, list, y, &title, sel);
                             row_hit(list, y, *i);
                             let bg = if sel { t.selection } else { t.dialog_bg };
@@ -1335,11 +1344,16 @@ fn flat_hits(app: &App) -> Vec<Item> {
     v.extend(h.albums.iter().cloned().map(Item::Node));
     v.extend(h.tracks.iter().cloned().map(Item::Track));
     v.extend(h.playlists.iter().cloned().map(Item::Node));
+    if app.stations_only {
+        v.clear();
+    }
+    v.extend(app.search_stations.iter().cloned().map(Item::Track));
     v
 }
 
 fn section_of(i: &Item) -> &'static str {
     match i {
+        Item::Track(t) if super::draw::is_live(t) => "Stations",
         Item::Track(_) => "Songs",
         Item::Node(n) => match n.kind {
             NodeKind::Artist => "Artists",
@@ -1352,6 +1366,10 @@ fn section_of(i: &Item) -> &'static str {
 
 fn hit_text(i: &Item) -> (String, String) {
     match i {
+        // Station: name, then country / genres and format.
+        Item::Track(t) if super::draw::is_live(t) => {
+            (t.title.clone(), format!("{} · {}", t.artist, t.album.trim_start_matches("Radio · ")))
+        }
         Item::Track(t) => (
             t.display_title().to_string(),
             format!("{} · {}  {}", t.display_artist(), t.album, t.duration_ms.map(fmt_time).unwrap_or_default()),
@@ -1363,8 +1381,17 @@ fn hit_text(i: &Item) -> (String, String) {
 fn open_hit(app: &mut App, h: &Item, all: &[Item]) {
     app.screen = Screen::Library;
     match h {
+        Item::Track(t) if super::draw::is_live(t) => {
+            let id = app.engine.queue.lock().replace(vec![t.clone()], Some("Radio".into()), 0);
+            if let Some(id) = id {
+                app.engine.send(Cmd::PlayItem(id));
+            }
+        }
         Item::Track(t) => {
-            let tracks: Vec<Arc<Track>> = all.iter().filter_map(|i| if let Item::Track(t) = i { Some(t.clone()) } else { None }).collect();
+            let tracks: Vec<Arc<Track>> = all
+                .iter()
+                .filter_map(|i| if let Item::Track(t) = i { (!super::draw::is_live(t)).then(|| t.clone()) } else { None })
+                .collect();
             let start = tracks.iter().position(|x| Arc::ptr_eq(x, t)).unwrap_or(0);
             let id = app.engine.queue.lock().replace(tracks, Some("Search".into()), start);
             if let Some(id) = id {

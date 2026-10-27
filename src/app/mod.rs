@@ -167,6 +167,11 @@ pub struct App {
     pub hit: draw::Hits,
     pub search_hits: SearchHits,
     pub search_seq: u64,
+    /// Station hits for the search, and whether they are still coming.
+    pub search_stations: Vec<Arc<Track>>,
+    pub stations_busy: bool,
+    /// The search was opened from "Find a station…": show stations only.
+    pub stations_only: bool,
     pub mpris: Option<crate::mpris::Mpris>,
     preview_theme: Option<Theme>,
     kitty_ok: bool,
@@ -633,8 +638,7 @@ impl App {
             (Screen::Library, Focus::Side) => match self.selected_side() {
                 Some(Side::NowPlaying) if self.now().track.is_some() => self.screen = Screen::NowPlaying,
                 Some(Side::Node { node, .. }) if node == RADIO_FIND => {
-                    self.dialog =
-                        Some(Dialog::input("Find a station", "Name, genre or country", String::new(), dialogs::InputFor::RadioSearch));
+                    self.open_search(true);
                 }
                 Some(Side::Node { node, .. }) if node == LASTFM_PROFILE => {
                     if let Some(u) = crate::lastfm::profile_url() {
@@ -782,7 +786,7 @@ impl App {
                     self.worker.send(Job::Tracks { nodes, tracks, then });
                 }
             }
-            Action::Search => self.dialog = Some(Dialog::search()),
+            Action::Search => self.open_search(false),
             Action::ToggleScreen => {
                 self.screen = match self.screen {
                     Screen::Library => Screen::NowPlaying,
@@ -1235,6 +1239,12 @@ impl App {
                     }
                 }
             }
+            Msg::Stations { seq, list } => {
+                if seq == self.search_seq {
+                    self.search_stations = list;
+                    self.stations_busy = false;
+                }
+            }
             Msg::Search { seq, hits } => {
                 if seq == self.search_seq {
                     self.search_hits = hits;
@@ -1525,9 +1535,26 @@ impl App {
         self.worker.send(j);
     }
 
+    /// Open the search box; `stations_only` from "Find a station…".
+    pub fn open_search(&mut self, stations_only: bool) {
+        self.stations_only = stations_only;
+        self.search_hits = Default::default();
+        self.search_stations.clear();
+        self.stations_busy = false;
+        self.dialog = Some(Dialog::search());
+    }
+
     pub fn search(&mut self, q: String) {
         self.search_seq += 1;
-        self.worker.send(Job::Search { seq: self.search_seq, query: q });
+        let seq = self.search_seq;
+        self.search_stations.clear();
+        self.stations_busy = q.trim().chars().count() >= 3;
+        if self.stations_busy {
+            self.worker.send(Job::FindStations { seq, query: q.trim().to_string() });
+        }
+        if !self.stations_only {
+            self.worker.send(Job::Search { seq, query: q });
+        }
     }
 }
 
@@ -1684,6 +1711,9 @@ pub fn run(cfg: Config) -> Result<()> {
         hit: Default::default(),
         search_hits: Default::default(),
         search_seq: 0,
+        search_stations: Vec::new(),
+        stations_busy: false,
+        stations_only: false,
         mpris,
         preview_theme: None,
         lyrics_offset: 0,

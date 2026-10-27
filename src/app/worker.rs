@@ -68,6 +68,11 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    /// Stations for the main search (runs on its own thread).
+    FindStations {
+        seq: u64,
+        query: String,
+    },
     LastfmLogin,
     /// A stream address typed by the user.
     AddStream(String),
@@ -132,6 +137,10 @@ pub enum Job {
 }
 
 pub enum Msg {
+    Stations {
+        seq: u64,
+        list: Vec<Arc<Track>>,
+    },
     /// A station became (true) or stopped being a favorite.
     RadioFav(bool),
     /// Last.fm login finished: user name, or why not.
@@ -188,6 +197,7 @@ pub struct Worker {
 
 impl Worker {
     pub fn start(local: Arc<LocalSource>, radio: Arc<RadioSource>, out: cb::Sender<Msg>) -> Self {
+        let radio_search = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
             .name("ui-worker".into())
@@ -201,6 +211,10 @@ impl Worker {
                         if matches!(j, Job::Search { .. }) && Some(i) != last_search {
                             continue;
                         }
+                        if let Job::FindStations { seq, query } = j {
+                            find_stations(&radio, &radio_search, seq, query, &out);
+                            continue;
+                        }
                         run(&local, &radio, j, &out);
                     }
                 }
@@ -212,6 +226,22 @@ impl Worker {
     pub fn send(&self, j: Job) {
         let _ = self.tx.send(j);
     }
+}
+
+/// Station search off the worker thread. Waits a moment and only asks
+/// radio-browser.info if no newer search came in meanwhile.
+fn find_stations(radio: &Arc<RadioSource>, latest: &Arc<std::sync::atomic::AtomicU64>, seq: u64, query: String, out: &cb::Sender<Msg>) {
+    use std::sync::atomic::Ordering::Relaxed;
+    latest.store(seq, Relaxed);
+    let (radio, latest, out) = (radio.clone(), latest.clone(), out.clone());
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(350));
+        if latest.load(Relaxed) != seq {
+            return;
+        }
+        let list = radio.find(&query, 20).unwrap_or_default();
+        let _ = out.send(Msg::Stations { seq, list });
+    });
 }
 
 /// Children of a list node, from the source it belongs to.
@@ -451,6 +481,8 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
                 .collect();
             send(Msg::Restored { session, tracks });
         }
+        // Handled before `run` (own thread).
+        Job::FindStations { .. } => {}
         Job::LastfmLogin => {
             // Waits for the browser; must not hold up other jobs.
             let out = out.clone();

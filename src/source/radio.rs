@@ -31,8 +31,6 @@ pub const FAVORITES: &str = "radio:favorites";
 pub const POPULAR: &str = "radio:popular";
 pub const GENRES: &str = "radio:genres";
 pub const COUNTRIES: &str = "radio:countries";
-/// Followed by the search text.
-pub const SEARCH: &str = "radio:search:";
 /// Followed by a genre name / a country code.
 const GENRE: &str = "radio:genre:";
 const COUNTRY: &str = "radio:country:";
@@ -288,6 +286,14 @@ impl RadioSource {
     }
 
     /// Stations whose name or tags match, most popular first.
+    /// Stations for the main search: the most popular matches, remembered for playing.
+    pub fn find(&self, q: &str, limit: usize) -> Result<Vec<Arc<Track>>> {
+        let mut list = Self::search_stations(q)?;
+        list.truncate(limit);
+        self.remember(&list);
+        Ok(list.iter().map(|s| Arc::new(s.track())).collect())
+    }
+
     fn search_stations(q: &str) -> Result<Vec<Station>> {
         let base = |k: &'static str| {
             vec![
@@ -328,8 +334,6 @@ impl Source for RadioSource {
             Self::stations_in("/stations/bytagexact", g)?
         } else if let Some(c) = node.strip_prefix(COUNTRY) {
             Self::stations_in("/stations/bycountrycodeexact", c)?
-        } else if let Some(q) = node.strip_prefix(SEARCH) {
-            Self::search_stations(q)?
         } else {
             bail!("unknown radio list {node}");
         };
