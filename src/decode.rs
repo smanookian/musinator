@@ -95,7 +95,7 @@ impl FileStream {
         hint.with_extension(ext);
         let reader = symphonia::default::get_probe()
             .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
-            .context("this station sends a format Musinator can't play")?;
+            .context("this audio format can't be played")?;
         Self::from_reader(reader, 0, None)
     }
 

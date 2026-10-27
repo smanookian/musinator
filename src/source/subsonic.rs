@@ -2,12 +2,10 @@
 //! The login is kept as a salted token in `~/.config/musinator/server.json`;
 //! the password itself is never stored.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -16,11 +14,6 @@ use super::{Caps, Item, Lyrics, Node, NodeKind, Page, SearchHits, Source, Stream
 use crate::decode::FileStream;
 use crate::model::{ArtRef, AudioFormat, SourceId, Track, TrackRef};
 
-pub const ID: &str = "subsonic";
-pub const ARTISTS: &str = "subsonic:artists";
-pub const ALBUMS: &str = "subsonic:albums";
-pub const NEWEST: &str = "subsonic:newest";
-pub const PLAYLISTS: &str = "subsonic:playlists";
 const CLIENT: &str = "Musinator";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -72,31 +65,6 @@ fn enc(s: &str) -> String {
         .collect()
 }
 
-fn path() -> PathBuf {
-    crate::config::config_dir().join("server.json")
-}
-
-pub fn load_login() -> Option<Login> {
-    serde_json::from_str(&std::fs::read_to_string(path()).ok()?).ok()
-}
-
-pub fn save_login(l: Option<&Login>) -> Result<()> {
-    match l {
-        Some(l) => {
-            std::fs::create_dir_all(crate::config::config_dir())?;
-            let p = path();
-            std::fs::write(&p, serde_json::to_string_pretty(l)?)?;
-            // Only you can read it.
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
-        }
-        None => {
-            let _ = std::fs::remove_file(path());
-        }
-    }
-    Ok(())
-}
-
 fn get(l: &Login, method: &str, extra: &[(&str, &str)]) -> Result<Value> {
     let agent: ureq::Agent =
         ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(20))).http_status_as_error(false).build().into();
@@ -131,18 +99,23 @@ fn arr(v: &Value) -> Vec<Value> {
     }
 }
 
+/// One Subsonic server. Its id ("srv1") prefixes its list nodes ("srv1:artists").
 pub struct SubsonicSource {
     id: SourceId,
-    pub login: Mutex<Option<Login>>,
+    login: Login,
 }
 
 impl SubsonicSource {
-    pub fn new() -> Self {
-        Self { id: Arc::from(ID), login: Mutex::new(load_login()) }
+    pub fn new(id: &str, login: Login) -> Self {
+        Self { id: Arc::from(id), login }
     }
 
     fn login(&self) -> Result<Login> {
-        self.login.lock().clone().context("No music server set up (Settings → Library → Music server)")
+        Ok(self.login.clone())
+    }
+
+    fn node(&self, what: &str) -> String {
+        format!("{}:{what}", self.id)
     }
 
     fn song(&self, s: &Value) -> Track {
@@ -199,7 +172,7 @@ impl SubsonicSource {
             _ => artist.to_string(),
         };
         Item::Node(Node {
-            id: format!("subsonic:album:{}", a["id"].as_str().unwrap_or("")),
+            id: self.node(&format!("album:{}", a["id"].as_str().unwrap_or(""))),
             kind: NodeKind::Album,
             title: a["name"].as_str().or(a["title"].as_str()).unwrap_or("").into(),
             subtitle,
@@ -208,10 +181,10 @@ impl SubsonicSource {
         })
     }
 
-    fn artist_node(a: &Value) -> Item {
+    fn artist_node(&self, a: &Value) -> Item {
         let n = a["albumCount"].as_u64().unwrap_or(0);
         Item::Node(Node {
-            id: format!("subsonic:artist:{}", a["id"].as_str().unwrap_or("")),
+            id: self.node(&format!("artist:{}", a["id"].as_str().unwrap_or(""))),
             kind: NodeKind::Artist,
             title: a["name"].as_str().unwrap_or("").into(),
             subtitle: format!("{n} album{}", if n == 1 { "" } else { "s" }),
@@ -242,7 +215,7 @@ impl SubsonicSource {
         let l = self.login()?;
         let r = get(&l, "search3", &[("query", q), ("artistCount", "5"), ("albumCount", "10"), ("songCount", "20")])?;
         let s = &r["searchResult3"];
-        let mut v: Vec<Item> = arr(&s["artist"]).iter().map(Self::artist_node).collect();
+        let mut v: Vec<Item> = arr(&s["artist"]).iter().map(|a| self.artist_node(a)).collect();
         v.extend(arr(&s["album"]).iter().map(|a| self.album_node(a)));
         v.extend(arr(&s["song"]).iter().map(|x| Item::Track(Arc::new(self.song(x)))));
         Ok(v)
@@ -253,12 +226,6 @@ impl SubsonicSource {
         if let Ok(l) = self.login() {
             let _ = get(&l, "scrobble", &[("id", id), ("submission", "true")]);
         }
-    }
-}
-
-impl Default for SubsonicSource {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -273,7 +240,8 @@ impl Source for SubsonicSource {
 
     fn children(&self, node: &str, _page: Page) -> Result<Vec<Item>> {
         let l = self.login()?;
-        if node == ARTISTS {
+        let node = node.strip_prefix(&*self.id).and_then(|n| n.strip_prefix(':')).unwrap_or(node);
+        if node == "artists" {
             let r = match get(&l, "getArtists", &[]) {
                 Ok(r) => r,
                 // Navidrome makes its artist list only after the first full scan.
@@ -285,21 +253,21 @@ impl Source for SubsonicSource {
                     _ => return Err(e),
                 },
             };
-            return Ok(arr(&r["artists"]["index"]).iter().flat_map(|i| arr(&i["artist"])).map(|a| Self::artist_node(&a)).collect());
+            return Ok(arr(&r["artists"]["index"]).iter().flat_map(|i| arr(&i["artist"])).map(|a| self.artist_node(&a)).collect());
         }
-        if node == ALBUMS {
+        if node == "albums" {
             return self.album_list(&l, "alphabeticalByName", 20_000);
         }
-        if node == NEWEST {
+        if node == "newest" {
             return self.album_list(&l, "newest", 100);
         }
-        if node == PLAYLISTS {
+        if node == "playlists" {
             let r = get(&l, "getPlaylists", &[])?;
             return Ok(arr(&r["playlists"]["playlist"])
                 .iter()
                 .map(|p| {
                     Item::Node(Node {
-                        id: format!("subsonic:playlist:{}", p["id"].as_str().unwrap_or("")),
+                        id: self.node(&format!("playlist:{}", p["id"].as_str().unwrap_or(""))),
                         kind: NodeKind::Folder,
                         title: p["name"].as_str().unwrap_or("").into(),
                         subtitle: p["owner"].as_str().unwrap_or("").into(),
@@ -309,15 +277,15 @@ impl Source for SubsonicSource {
                 })
                 .collect());
         }
-        if let Some(id) = node.strip_prefix("subsonic:artist:") {
+        if let Some(id) = node.strip_prefix("artist:") {
             let r = get(&l, "getArtist", &[("id", id)])?;
             return Ok(arr(&r["artist"]["album"]).iter().map(|a| self.album_node(a)).collect());
         }
-        if let Some(id) = node.strip_prefix("subsonic:album:") {
+        if let Some(id) = node.strip_prefix("album:") {
             let r = get(&l, "getAlbum", &[("id", id)])?;
             return Ok(arr(&r["album"]["song"]).iter().map(|s| Item::Track(Arc::new(self.song(s)))).collect());
         }
-        if let Some(id) = node.strip_prefix("subsonic:playlist:") {
+        if let Some(id) = node.strip_prefix("playlist:") {
             let r = get(&l, "getPlaylist", &[("id", id)])?;
             return Ok(arr(&r["playlist"]["entry"]).iter().map(|s| Item::Track(Arc::new(self.song(s)))).collect());
         }
@@ -342,7 +310,19 @@ impl Source for SubsonicSource {
             .ok()
             .and_then(|v| v["song"]["suffix"].as_str().map(str::to_string))
             .unwrap_or("mp3".into());
-        let src = HttpFile::open(&url)?;
+        let mut src = HttpFile::open(&url)?;
+        if src.content_type.contains("json") || src.content_type.contains("xml") {
+            // An error instead of the song.
+            let mut text = String::new();
+            let _ = std::io::Read::read_to_string(&mut src, &mut text);
+            let msg = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|v| v["subsonic-response"]["error"]["message"].as_str().map(str::to_string));
+            bail!(
+                "the server can't send this song{}: is its file still in the server's music folder?",
+                msg.map(|m| format!(" ({m})")).unwrap_or_default()
+            );
+        }
         Ok(Box::new(FileStream::open_stream(Box::new(src), &suffix)?))
     }
 

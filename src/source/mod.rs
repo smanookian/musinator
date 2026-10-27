@@ -11,6 +11,7 @@ pub mod jellyfin;
 pub mod local;
 pub mod podcast;
 pub mod radio;
+pub mod servers;
 pub mod subsonic;
 
 use std::collections::HashMap;
@@ -177,15 +178,19 @@ pub trait Stream: Send {
 /// All sources, by id.
 #[derive(Default)]
 pub struct Sources {
-    map: HashMap<SourceId, Arc<dyn Source>>,
+    /// Music servers come and go while the app runs.
+    map: parking_lot::RwLock<HashMap<SourceId, Arc<dyn Source>>>,
 }
 
 impl Sources {
-    pub fn add(&mut self, s: Arc<dyn Source>) {
-        self.map.insert(s.id().clone(), s);
+    pub fn add(&self, s: Arc<dyn Source>) {
+        self.map.write().insert(s.id().clone(), s);
     }
-    pub fn get(&self, id: &str) -> Result<&Arc<dyn Source>> {
-        self.map.get(id).ok_or_else(|| anyhow::anyhow!("unknown source {id}"))
+    pub fn remove(&self, id: &str) {
+        self.map.write().remove(id);
+    }
+    pub fn get(&self, id: &str) -> Result<Arc<dyn Source>> {
+        self.map.read().get(id).cloned().ok_or_else(|| anyhow::anyhow!("this music is not available any more (source {id} was removed)"))
     }
     pub fn open(&self, r: &TrackRef) -> Result<Box<dyn Stream>> {
         self.get(&r.source)?.open(r)

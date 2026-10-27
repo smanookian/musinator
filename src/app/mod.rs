@@ -53,7 +53,7 @@ pub enum Focus {
 pub enum Side {
     NowPlaying,
     Queue,
-    Header(&'static str),
+    Header(String),
     Blank,
     Node { label: String, node: String },
     Playlist { id: i64, name: String, count: u64 },
@@ -185,8 +185,7 @@ pub struct App {
     pub podcasts: Arc<crate::source::podcast::PodcastSource>,
     /// Total size of podcast downloads ("1.2 GB"), updated when the Downloads list loads.
     pub downloads_label: String,
-    pub server: Arc<crate::source::subsonic::SubsonicSource>,
-    pub jellyfin: Arc<crate::source::jellyfin::JellyfinSource>,
+    pub servers: Arc<crate::source::servers::Servers>,
     /// Music server results for the main search.
     pub server_hits: Vec<Item>,
     /// When the episode position was last saved.
@@ -348,18 +347,6 @@ impl App {
         }
     }
 
-    /// The music server lists for the sidebar (Navidrome/Subsonic or Jellyfin), if one is set up.
-    pub fn server_nodes(&self) -> Option<[(&'static str, &'static str); 4]> {
-        use crate::source::{jellyfin as jf, subsonic as ss};
-        if self.server.login.lock().is_some() {
-            Some([("Artists", ss::ARTISTS), ("Albums", ss::ALBUMS), ("Recently added", ss::NEWEST), ("Playlists", ss::PLAYLISTS)])
-        } else if self.jellyfin.login.lock().is_some() {
-            Some([("Artists", jf::ARTISTS), ("Albums", jf::ALBUMS), ("Recently added", jf::NEWEST), ("Playlists", jf::PLAYLISTS)])
-        } else {
-            None
-        }
-    }
-
     /// Last.fm part of the info line: "last.fm", "last.fm ✓" once the song counts,
     /// plus waiting scrobbles. None when not logged in or off.
     pub fn lastfm_status(&self) -> Option<(String, bool)> {
@@ -469,12 +456,12 @@ impl App {
 
     pub fn rebuild_side(&mut self) {
         let keep = self.selected_side().map(side_key);
-        let mut s = vec![Side::NowPlaying, Side::Queue, Side::Blank, Side::Header("Library")];
+        let mut s = vec![Side::NowPlaying, Side::Queue, Side::Blank, Side::Header("Library".into())];
         for (l, n) in [("Artists", "artists"), ("Albums", "albums"), ("Tracks", "tracks"), ("Genres", "genres"), ("Folders", "folders")] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
         s.push(Side::Blank);
-        s.push(Side::Header("Playlists"));
+        s.push(Side::Header("Playlists".into()));
         if self.playlists.is_empty() {
             s.push(Side::Empty("none yet · N to add"));
         }
@@ -482,7 +469,7 @@ impl App {
             s.push(Side::Playlist { id: p.id, name: p.name.clone(), count: p.count });
         }
         s.push(Side::Blank);
-        s.push(Side::Header("Radio"));
+        s.push(Side::Header("Radio".into()));
         for (l, n) in [
             ("Favorites", crate::source::radio::FAVORITES),
             ("Popular", crate::source::radio::POPULAR),
@@ -493,15 +480,15 @@ impl App {
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
-        if let Some(nodes) = self.server_nodes() {
+        for srv in self.servers.all() {
             s.push(Side::Blank);
-            s.push(Side::Header("Music server"));
-            for (l, n) in nodes {
+            s.push(Side::Header(srv.name.clone()));
+            for (l, n) in srv.nodes() {
                 s.push(Side::Node { label: l.into(), node: n.into() });
             }
         }
         s.push(Side::Blank);
-        s.push(Side::Header("Podcasts"));
+        s.push(Side::Header("Podcasts".into()));
         for (l, n) in [
             ("New episodes", crate::source::podcast::NEW),
             ("Shows", crate::source::podcast::SHOWS),
@@ -512,7 +499,7 @@ impl App {
         }
         if self.lastfm_user.is_some() {
             s.push(Side::Blank);
-            s.push(Side::Header("Last.fm"));
+            s.push(Side::Header("Last.fm".into()));
             for (l, n) in [
                 ("Recent", "lastfm:recent"),
                 ("Loved", "lastfm:loved"),
@@ -524,7 +511,7 @@ impl App {
             }
         }
         s.push(Side::Blank);
-        s.push(Side::Header("Smart"));
+        s.push(Side::Header("Smart".into()));
         for (l, n) in [
             ("Most played", "smart:most"),
             ("Never played", "smart:never"),
@@ -1404,7 +1391,7 @@ impl App {
                 if listened >= need
                     && let Some(r) = track.r.clone()
                 {
-                    if &*r.source == crate::source::subsonic::ID || &*r.source == crate::source::jellyfin::ID {
+                    if self.servers.by_id(&r.source).is_some() {
                         self.worker.send(Job::ServerScrobble(r.clone()));
                     }
                     self.worker.send(Job::RecordPlay(r));
@@ -1511,10 +1498,13 @@ impl App {
                     self.server_hits = items;
                 }
             }
-            Msg::ServerLogin(r) => match r {
-                Ok((label, version)) => {
-                    self.info(format!("Music server connected: {label} ({version})"));
+            Msg::ServerAdded(r) => match r {
+                Ok(what) => {
+                    self.info(format!("Music server added: {what}"));
                     self.rebuild_side();
+                    if let Some(dialogs::Dialog::Servers { cursor }) = &mut self.dialog {
+                        *cursor = self.servers.all().len().saturating_sub(1);
+                    }
                 }
                 Err(e) => self.error(e),
             },
@@ -1824,7 +1814,7 @@ impl App {
             self.worker.send(Job::FindStations { seq, query: q.trim().to_string() });
         }
         self.server_hits.clear();
-        if !self.stations_only && q.trim().chars().count() >= 2 && self.server_nodes().is_some() {
+        if !self.stations_only && q.trim().chars().count() >= 2 && !self.servers.is_empty() {
             self.worker.send(Job::FindServer { seq, query: q.trim().to_string() });
         }
         if !self.stations_only {
@@ -1904,7 +1894,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let lib = Library::new(crate::config::data_dir().join("library.db"), cfg.folders(), lib_tx);
     lib.measure_loudness.store(cfg.measure_loudness, std::sync::atomic::Ordering::Relaxed);
     let local = Arc::new(LocalSource::new(lib.clone())?);
-    let mut sources = Sources::default();
+    let sources = Sources::default();
     sources.add(local.clone());
     let radio = Arc::new(crate::source::radio::RadioSource::open(&crate::config::data_dir().join("radio.db"))?);
     sources.add(radio.clone());
@@ -1915,11 +1905,8 @@ pub fn run(cfg: Config) -> Result<()> {
     podcasts.auto_download.store(cfg.podcast_auto_download, std::sync::atomic::Ordering::Relaxed);
     podcasts.start_refresher();
     sources.add(podcasts.clone());
-    let server = Arc::new(crate::source::subsonic::SubsonicSource::new());
-    sources.add(server.clone());
-    let jellyfin = Arc::new(crate::source::jellyfin::JellyfinSource::default());
-    sources.add(jellyfin.clone());
     let sources = Arc::new(sources);
+    let servers = crate::source::servers::Servers::load(sources.clone());
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
     engine.set_eq(cfg.eq_on, &cfg.eq_bands);
 
@@ -1956,8 +1943,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker =
-        Worker::start(worker::Srcs { local, radio, podcasts: podcasts.clone(), server: server.clone(), jellyfin: jellyfin.clone() }, w_tx);
+    let worker = Worker::start(worker::Srcs { local, radio, podcasts: podcasts.clone(), servers: servers.clone() }, w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
@@ -1994,8 +1980,7 @@ pub fn run(cfg: Config) -> Result<()> {
         last_liked: None,
         podcasts,
         downloads_label: String::new(),
-        server,
-        jellyfin,
+        servers,
         server_hits: Vec::new(),
         podcast_saved: Instant::now(),
         sources,

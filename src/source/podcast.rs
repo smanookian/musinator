@@ -143,6 +143,8 @@ fn fetch_feed(url: &str) -> Result<Feed> {
 /// An episode file over HTTP that can seek (Range requests), so streamed
 /// episodes support seeking and resuming like downloaded ones.
 pub(crate) struct HttpFile {
+    /// What the server says it sends ("audio/flac", "application/json", …).
+    pub(crate) content_type: String,
     url: String,
     len: u64,
     pos: u64,
@@ -151,8 +153,9 @@ pub(crate) struct HttpFile {
 
 impl HttpFile {
     pub(crate) fn open(url: &str) -> Result<Self> {
-        let mut f = Self { url: url.to_string(), len: 0, pos: 0, body: None };
+        let mut f = Self { content_type: String::new(), url: url.to_string(), len: 0, pos: 0, body: None };
         let resp = f.request(0)?;
+        f.content_type = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_ascii_lowercase();
         f.len = resp.headers().get("content-length").and_then(|v| v.to_str().ok()?.parse().ok()).unwrap_or(0);
         f.body = Some(Mutex::new(Box::new(resp.into_body().into_reader())));
         Ok(f)

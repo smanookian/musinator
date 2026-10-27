@@ -1,12 +1,10 @@
 //! Jellyfin music libraries. The login is kept as an access token in
 //! `~/.config/musinator/jellyfin.json`; the password is never stored.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -14,12 +12,6 @@ use super::podcast::HttpFile;
 use super::{Caps, Item, Lyrics, Node, NodeKind, Page, SearchHits, Source, Stream};
 use crate::decode::FileStream;
 use crate::model::{ArtRef, AudioFormat, SourceId, Track, TrackRef};
-
-pub const ID: &str = "jellyfin";
-pub const ARTISTS: &str = "jellyfin:artists";
-pub const ALBUMS: &str = "jellyfin:albums";
-pub const NEWEST: &str = "jellyfin:newest";
-pub const PLAYLISTS: &str = "jellyfin:playlists";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Login {
@@ -35,30 +27,6 @@ impl Login {
         let host = self.url.split("://").nth(1).unwrap_or(&self.url);
         format!("{}@{host}", self.user)
     }
-}
-
-fn path() -> PathBuf {
-    crate::config::config_dir().join("jellyfin.json")
-}
-
-pub fn load_login() -> Option<Login> {
-    serde_json::from_str(&std::fs::read_to_string(path()).ok()?).ok()
-}
-
-pub fn save_login(l: Option<&Login>) -> Result<()> {
-    match l {
-        Some(l) => {
-            std::fs::create_dir_all(crate::config::config_dir())?;
-            let p = path();
-            std::fs::write(&p, serde_json::to_string_pretty(l)?)?;
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
-        }
-        None => {
-            let _ = std::fs::remove_file(path());
-        }
-    }
-    Ok(())
 }
 
 fn auth_header(device_id: &str, token: Option<&str>) -> String {
@@ -125,20 +93,23 @@ fn items(v: &Value) -> Vec<Value> {
     v["Items"].as_array().cloned().unwrap_or_default()
 }
 
+/// One Jellyfin server. Its id ("srv2") prefixes its list nodes ("srv2:artists").
 pub struct JellyfinSource {
     id: SourceId,
-    pub login: Mutex<Option<Login>>,
-}
-
-impl Default for JellyfinSource {
-    fn default() -> Self {
-        Self { id: Arc::from(ID), login: Mutex::new(load_login()) }
-    }
+    login: Login,
 }
 
 impl JellyfinSource {
+    pub fn new(id: &str, login: Login) -> Self {
+        Self { id: Arc::from(id), login }
+    }
+
     fn login(&self) -> Result<Login> {
-        self.login.lock().clone().context("No music server set up (Settings → Library → Music server)")
+        Ok(self.login.clone())
+    }
+
+    fn node(&self, what: &str) -> String {
+        format!("{}:{what}", self.id)
     }
 
     fn get(&self, path: &str, query: &[(&str, &str)]) -> Result<Value> {
@@ -219,7 +190,7 @@ impl JellyfinSource {
             None => artist.to_string(),
         };
         Item::Node(Node {
-            id: format!("jellyfin:album:{}", v["Id"].as_str().unwrap_or("")),
+            id: self.node(&format!("album:{}", v["Id"].as_str().unwrap_or(""))),
             kind: NodeKind::Album,
             title: v["Name"].as_str().unwrap_or("").into(),
             subtitle,
@@ -228,9 +199,9 @@ impl JellyfinSource {
         })
     }
 
-    fn artist_node(v: &Value) -> Item {
+    fn artist_node(&self, v: &Value) -> Item {
         Item::Node(Node {
-            id: format!("jellyfin:artist:{}", v["Id"].as_str().unwrap_or("")),
+            id: self.node(&format!("artist:{}", v["Id"].as_str().unwrap_or(""))),
             kind: NodeKind::Artist,
             title: v["Name"].as_str().unwrap_or("").into(),
             subtitle: String::new(),
@@ -242,7 +213,7 @@ impl JellyfinSource {
     /// Results for the main search.
     pub fn find(&self, q: &str) -> Result<Vec<Item>> {
         let found = self.user_items(&[("searchTerm", q), ("IncludeItemTypes", "MusicArtist,MusicAlbum,Audio"), ("Limit", "40")])?;
-        let mut v: Vec<Item> = found.iter().filter(|i| i["Type"] == "MusicArtist").map(Self::artist_node).collect();
+        let mut v: Vec<Item> = found.iter().filter(|i| i["Type"] == "MusicArtist").map(|a| self.artist_node(a)).collect();
         v.extend(found.iter().filter(|i| i["Type"] == "MusicAlbum").map(|a| self.album_node(a)));
         v.extend(found.iter().filter(|i| i["Type"] == "Audio").take(20).map(|s| Item::Track(Arc::new(self.song(s)))));
         Ok(v)
@@ -276,18 +247,19 @@ impl Source for JellyfinSource {
                 .map(|s| Item::Track(Arc::new(self.song(s))))
                 .collect())
         };
-        if node == ARTISTS {
+        let node = node.strip_prefix(&*self.id).and_then(|n| n.strip_prefix(':')).unwrap_or(node);
+        if node == "artists" {
             let v = self.get("/Artists/AlbumArtists", &[("userId", &l.user_id), ("SortBy", "SortName")])?;
-            return Ok(items(&v).iter().map(Self::artist_node).collect());
+            return Ok(items(&v).iter().map(|a| self.artist_node(a)).collect());
         }
-        if node == ALBUMS {
+        if node == "albums" {
             return Ok(self
                 .user_items(&[("IncludeItemTypes", "MusicAlbum"), ("SortBy", "SortName")])?
                 .iter()
                 .map(|a| self.album_node(a))
                 .collect());
         }
-        if node == NEWEST {
+        if node == "newest" {
             return Ok(self
                 .user_items(&[
                     ("IncludeItemTypes", "MusicAlbum"),
@@ -299,13 +271,13 @@ impl Source for JellyfinSource {
                 .map(|a| self.album_node(a))
                 .collect());
         }
-        if node == PLAYLISTS {
+        if node == "playlists" {
             return Ok(self
                 .user_items(&[("IncludeItemTypes", "Playlist"), ("SortBy", "SortName")])?
                 .iter()
                 .map(|p| {
                     Item::Node(Node {
-                        id: format!("jellyfin:playlist:{}", p["Id"].as_str().unwrap_or("")),
+                        id: self.node(&format!("playlist:{}", p["Id"].as_str().unwrap_or(""))),
                         kind: NodeKind::Folder,
                         title: p["Name"].as_str().unwrap_or("").into(),
                         subtitle: String::new(),
@@ -315,17 +287,17 @@ impl Source for JellyfinSource {
                 })
                 .collect());
         }
-        if let Some(id) = node.strip_prefix("jellyfin:artist:") {
+        if let Some(id) = node.strip_prefix("artist:") {
             return Ok(self
                 .user_items(&[("IncludeItemTypes", "MusicAlbum"), ("AlbumArtistIds", id), ("SortBy", "ProductionYear,SortName")])?
                 .iter()
                 .map(|a| self.album_node(a))
                 .collect());
         }
-        if let Some(id) = node.strip_prefix("jellyfin:album:") {
+        if let Some(id) = node.strip_prefix("album:") {
             return songs(id);
         }
-        if let Some(id) = node.strip_prefix("jellyfin:playlist:") {
+        if let Some(id) = node.strip_prefix("playlist:") {
             // Playlists keep their own order.
             let v = self.get(&format!("/Playlists/{id}/Items"), &[("userId", &l.user_id), ("Fields", "MediaStreams,ProductionYear")])?;
             return Ok(items(&v).iter().map(|s| Item::Track(Arc::new(self.song(s)))).collect());
@@ -352,6 +324,9 @@ impl Source for JellyfinSource {
             .and_then(|v| v["MediaSources"][0]["Container"].as_str().map(|c| c.split(',').next().unwrap_or(c).to_string()))
             .unwrap_or("mp3".into());
         let src = HttpFile::open(&url)?;
+        if !src.content_type.starts_with("audio") && !src.content_type.contains("octet-stream") && !src.content_type.is_empty() {
+            bail!("the server can't send this song ({}): is its file still in the server's library?", src.content_type);
+        }
         Ok(Box::new(FileStream::open_stream(Box::new(src), &ext)?))
     }
 

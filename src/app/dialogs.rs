@@ -49,9 +49,10 @@ pub enum InputFor {
     Import,
     RadioUrl,
     Podcast,
-    ServerUrl,
-    ServerUser(String),
-    ServerPass(String, String),
+    ServerName,
+    ServerUrl(String),
+    ServerUser(String, String),
+    ServerPass(String, String, String),
 }
 
 pub enum Dialog {
@@ -89,6 +90,10 @@ pub enum Dialog {
     Folders {
         cursor: usize,
         changed: bool,
+    },
+    /// Settings → Music servers.
+    Servers {
+        cursor: usize,
     },
     Sleep {
         cursor: usize,
@@ -186,6 +191,7 @@ impl Dialog {
             | Dialog::Themes { cursor, .. }
             | Dialog::Keys { cursor, .. }
             | Dialog::Folders { cursor, .. }
+            | Dialog::Servers { cursor }
             | Dialog::Sleep { cursor }
             | Dialog::PlaylistPick { cursor, .. } => *cursor,
             Dialog::Tags(e) => e.mb.as_ref().map_or(e.row, |(_, c)| *c),
@@ -610,6 +616,35 @@ impl Dialog {
                 }
                 true
             }
+            Dialog::Servers { cursor } => {
+                let list = app.servers.all();
+                match k.code {
+                    _ if esc => return false,
+                    KeyCode::Down | KeyCode::Char('j') => *cursor = (*cursor + 1).min(list.len().saturating_sub(1)),
+                    KeyCode::Up | KeyCode::Char('k') => *cursor = cursor.saturating_sub(1),
+                    KeyCode::Char('a') => {
+                        app.dialog = Some(Dialog::input(
+                            "Add music server",
+                            "Name (e.g. Home; empty = the address)",
+                            String::new(),
+                            InputFor::ServerName,
+                        ));
+                        return false;
+                    }
+                    KeyCode::Char('d') | KeyCode::Delete => {
+                        if let Some(srv) = list.get(*cursor)
+                            && let Some(name) = app.servers.remove(&srv.id)
+                        {
+                            app.info(format!("Music server removed: {name}"));
+                            app.lists.retain(|v| !v.node.starts_with(&format!("{}:", srv.id)));
+                            app.rebuild_side();
+                            *cursor = cursor.saturating_sub(1);
+                        }
+                    }
+                    _ => {}
+                }
+                true
+            }
             Dialog::Folders { cursor, changed } => {
                 match k.code {
                     _ if esc => {
@@ -642,7 +677,7 @@ impl Dialog {
                 if k.code == KeyCode::Enter {
                     // Passwords may start or end with spaces.
                     let v = if matches!(what, InputFor::ServerPass(..)) { value.clone() } else { value.trim().to_string() };
-                    if v.is_empty() {
+                    if v.is_empty() && !matches!(what, InputFor::ServerName) {
                         return true;
                     }
                     match std::mem::replace(what, InputFor::NewPlaylist) {
@@ -651,15 +686,25 @@ impl Dialog {
                         InputFor::RenamePlaylist(id) => app.send_job(Job::RenamePlaylist { id, name: v }),
                         InputFor::Export(id) => app.send_job(Job::Export { id, path: crate::config::expand(&v) }),
                         InputFor::Import => app.send_job(Job::Import { path: crate::config::expand(&v) }),
-                        InputFor::ServerUrl => {
-                            app.dialog = Some(Dialog::input("Music server", "User name", String::new(), InputFor::ServerUser(v)));
+                        InputFor::ServerName => {
+                            app.dialog = Some(Dialog::input(
+                                "Add music server",
+                                "Address (e.g. http://192.168.1.5:4533)",
+                                String::new(),
+                                InputFor::ServerUrl(v),
+                            ));
                         }
-                        InputFor::ServerUser(url) => {
-                            app.dialog = Some(Dialog::input("Music server", "Password", String::new(), InputFor::ServerPass(url, v)));
+                        InputFor::ServerUrl(name) => {
+                            app.dialog = Some(Dialog::input("Add music server", "User name", String::new(), InputFor::ServerUser(name, v)));
                         }
-                        InputFor::ServerPass(url, user) => {
+                        InputFor::ServerUser(name, url) => {
+                            app.dialog =
+                                Some(Dialog::input("Add music server", "Password", String::new(), InputFor::ServerPass(name, url, v)));
+                        }
+                        InputFor::ServerPass(name, url, user) => {
                             app.info("Connecting to the music server…");
-                            app.send_job(Job::ServerLogin { url, user, password: v });
+                            app.send_job(Job::AddServer { name, url, user, password: v });
+                            app.dialog = Some(Dialog::Servers { cursor: 0 });
                         }
                         InputFor::Podcast if v.starts_with("http://") || v.starts_with("https://") => {
                             app.info("Checking the feed…");
@@ -1064,11 +1109,11 @@ impl Dialog {
                 }
                 // Rows with section headers.
                 let mut rows: Vec<(Option<usize>, String)> = Vec::new();
-                let mut last = "";
+                let mut last = String::new();
                 for (i, h) in hits.iter().enumerate() {
-                    let sec = section_of(h);
+                    let sec = section_of(app, h);
                     if sec != last {
-                        rows.push((None, sec.to_string()));
+                        rows.push((None, sec.clone()));
                         last = sec;
                     }
                     rows.push((Some(i), String::new()));
@@ -1246,6 +1291,31 @@ impl Dialog {
                 let line = msg.clone().unwrap_or_else(|| "enter set key · r reset · esc close".into());
                 hints_row(f.buffer_mut(), inner, &line, muted);
             }
+            Dialog::Servers { cursor } => {
+                let list = app.servers.all();
+                let h = (list.len() as u16 + 5).clamp(7, 20);
+                let inner = frame(f, app, 76, h, "Music servers");
+                if list.is_empty() {
+                    put(f.buffer_mut(), inner.x + 3, inner.y + 1, "No music servers yet. Press a to add one.", inner.width - 4, muted);
+                }
+                for (k, s) in list.iter().enumerate() {
+                    let y = inner.y + 1 + k as u16;
+                    let sel = k == *cursor;
+                    sel_row(f, app, inner, y, &s.name, sel);
+                    row_hit(inner, y, k);
+                    let bg = if sel { t.selection } else { t.dialog_bg };
+                    let right = format!("{} · {}", s.label(), s.kind_name());
+                    put_right(
+                        f.buffer_mut(),
+                        inner.x + inner.width - 2,
+                        y,
+                        &right,
+                        inner.width * 2 / 3,
+                        Style::default().fg(c(t.muted)).bg(c(bg)),
+                    );
+                }
+                hints_row(f.buffer_mut(), inner, "a add · d remove · esc done", muted);
+            }
             Dialog::Folders { cursor, .. } => {
                 let h = (app.cfg.music_folders.len() as u16 + 5).clamp(7, 20);
                 let inner = frame(f, app, 64, h, "Music folders");
@@ -1375,14 +1445,19 @@ fn flat_hits(app: &App) -> Vec<Item> {
     v
 }
 
-fn section_of(i: &Item) -> &'static str {
+fn section_of(app: &App, i: &Item) -> String {
+    let server = match i {
+        Item::Node(n) => app.servers.for_node(&n.id),
+        Item::Track(t) => t.r.as_ref().and_then(|r| app.servers.by_id(&r.source)),
+    };
+    if let Some(s) = server {
+        return format!("On {}", s.name);
+    }
+    section_name(i).to_string()
+}
+
+fn section_name(i: &Item) -> &'static str {
     match i {
-        Item::Node(n) if n.id.starts_with("subsonic:") || n.id.starts_with("jellyfin:") => "On your music server",
-        Item::Track(t)
-            if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::subsonic::ID || &*r.source == crate::source::jellyfin::ID) =>
-        {
-            "On your music server"
-        }
         Item::Track(t) if super::draw::is_live(t) => "Stations",
         Item::Track(_) => "Songs",
         Item::Node(n) => match n.kind {
@@ -1504,17 +1579,7 @@ fn open_setting(app: &mut App, key: &str) -> bool {
         "keys" => app.dialog = Some(Dialog::Keys { cursor: 0, offset: 0, capture: false, msg: None }),
         "music_folders" => app.dialog = Some(Dialog::Folders { cursor: 0, changed: false }),
         "import_playlist" => app.dialog = Some(Dialog::input("Import playlist", "File", "~/".into(), InputFor::Import)),
-        "server" => {
-            let old = app.server.login.lock().take().map(|l| l.label()).or_else(|| app.jellyfin.login.lock().take().map(|l| l.label()));
-            if let Some(label) = old {
-                let _ = crate::source::subsonic::save_login(None);
-                let _ = crate::source::jellyfin::save_login(None);
-                app.info(format!("Music server disconnected ({label})"));
-                app.rebuild_side();
-                return false;
-            }
-            app.dialog = Some(Dialog::input("Music server", "Address (e.g. http://192.168.1.5:4533)", String::new(), InputFor::ServerUrl));
-        }
+        "servers" => app.dialog = Some(Dialog::Servers { cursor: 0 }),
         "lastfm" => {
             if let Some(u) = crate::lastfm::user() {
                 crate::lastfm::logout();

@@ -295,7 +295,7 @@ pub const SETTINGS: &[Setting] = &[
     ),
     s!("mpris", "Desktop", "Media keys (MPRIS)", "Media keys, playerctl and the Omarchy media controls.", Kind::Toggle),
     s!("notifications", "Desktop", "Notify on track change", "Desktop notification when a new song starts.", Kind::Toggle),
-    s!("server", "Library", "Music server", "Navidrome, Jellyfin or another Subsonic server. Press again to disconnect.", Kind::Open),
+    s!("servers", "Library", "Music servers", "Navidrome, Jellyfin or other Subsonic servers. Add as many as you like.", Kind::Open),
     s!(
         "podcast_auto_download",
         "Library",
@@ -356,10 +356,15 @@ impl Config {
             "lastfm" => crate::lastfm::user().map(|u| format!("Logged in as {u}")).unwrap_or_else(|| "Not connected".into()),
             "lastfm_scrobble" => on(self.lastfm_scrobble),
             "podcast_auto_download" => on(self.podcast_auto_download),
-            "server" => crate::source::subsonic::load_login()
-                .map(|l| l.label())
-                .or_else(|| crate::source::jellyfin::load_login().map(|l| format!("{} (Jellyfin)", l.label())))
-                .unwrap_or_else(|| "Not set up".into()),
+            "servers" => match std::fs::read_to_string(config_dir().join("servers.json"))
+                .ok()
+                .and_then(|t| serde_json::from_str::<Vec<serde_json::Value>>(&t).ok())
+                .map_or(0, |v| v.len())
+            {
+                0 => "None".into(),
+                1 => "1 server".into(),
+                n => format!("{n} servers"),
+            },
             "lastfm_radio" => on(self.lastfm_radio),
             "notifications" => on(self.notifications),
             _ => String::new(),

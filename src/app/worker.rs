@@ -8,11 +8,10 @@ use crossbeam_channel as cb;
 
 use crate::library::{db, m3u8};
 use crate::model::{Track, TrackRef};
-use crate::source::jellyfin::JellyfinSource;
 use crate::source::local::LocalSource;
 use crate::source::podcast::PodcastSource;
 use crate::source::radio::RadioSource;
-use crate::source::subsonic::SubsonicSource;
+use crate::source::servers::Servers;
 use crate::source::{Item, Lyrics, Page, SearchHits, Source};
 
 /// What to do with resolved tracks.
@@ -76,8 +75,9 @@ pub enum Job {
         seq: u64,
         query: String,
     },
-    /// Find out which kind of server it is, log in, save the login.
-    ServerLogin {
+    /// Find out which kind of server it is, log in, add it to the list.
+    AddServer {
+        name: String,
         url: String,
         user: String,
         password: String,
@@ -161,8 +161,8 @@ pub enum Msg {
         seq: u64,
         items: Vec<Item>,
     },
-    /// ("user@host", server version) or why not.
-    ServerLogin(Result<(String, String), String>),
+    /// "Home · Jellyfin 12.4", or why not.
+    ServerAdded(Result<String, String>),
     Subscribed {
         title: String,
         on: bool,
@@ -228,8 +228,8 @@ pub struct Worker {
 
 impl Worker {
     pub fn start(srcs: Srcs, out: cb::Sender<Msg>) -> Self {
-        let Srcs { radio, server, jellyfin, .. } = &srcs;
-        let (radio, server, jellyfin) = (radio.clone(), server.clone(), jellyfin.clone());
+        let Srcs { radio, servers, .. } = &srcs;
+        let (radio, servers) = (radio.clone(), servers.clone());
         let radio_search = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
@@ -249,26 +249,34 @@ impl Worker {
                             continue;
                         }
                         if let Job::FindServer { seq, query } = j {
-                            let (server, jf, out) = (server.clone(), jellyfin.clone(), out.clone());
+                            let (servers, out) = (servers.clone(), out.clone());
                             std::thread::spawn(move || {
-                                let items = if jf.login.lock().is_some() { jf.find(&query) } else { server.find(&query) };
-                                let _ = out.send(Msg::ServerHits { seq, items: items.unwrap_or_default() });
+                                // All servers at once; each answers on its own.
+                                let handles: Vec<_> = servers
+                                    .all()
+                                    .into_iter()
+                                    .map(|s| {
+                                        let q = query.clone();
+                                        std::thread::spawn(move || s.find(&q).unwrap_or_default())
+                                    })
+                                    .collect();
+                                let items = handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect();
+                                let _ = out.send(Msg::ServerHits { seq, items });
                             });
                             continue;
                         }
-                        if let Job::ServerLogin { url, user, password } = j {
-                            let (server, jf, out) = (server.clone(), jellyfin.clone(), out.clone());
+                        if let Job::AddServer { name, url, user, password } = j {
+                            let (servers, out) = (servers.clone(), out.clone());
                             std::thread::spawn(move || {
-                                let r = server_login(&server, &jf, &url, &user, &password);
-                                let _ = out.send(Msg::ServerLogin(r.map_err(|e| format!("Music server: {e:#}"))));
+                                let r = servers.add(&name, &url, &user, &password).map_err(|e| format!("Music server: {e:#}"));
+                                let _ = out.send(Msg::ServerAdded(r));
                             });
                             continue;
                         }
                         if let Job::ServerScrobble(r) = j {
-                            let (server, jf) = (server.clone(), jellyfin.clone());
-                            std::thread::spawn(move || {
-                                if &*r.source == crate::source::jellyfin::ID { jf.scrobble(&r.id) } else { server.scrobble(&r.id) }
-                            });
+                            if let Some(s) = servers.by_id(&r.source) {
+                                std::thread::spawn(move || s.scrobble(&r.id));
+                            }
                             continue;
                         }
                         run(&srcs, j, &out);
@@ -305,47 +313,14 @@ pub struct Srcs {
     pub local: Arc<LocalSource>,
     pub radio: Arc<RadioSource>,
     pub podcasts: Arc<PodcastSource>,
-    pub server: Arc<SubsonicSource>,
-    pub jellyfin: Arc<JellyfinSource>,
-}
-
-/// Log in to a music server: Jellyfin if the address is one, else Subsonic
-/// (Navidrome, …). Only one server is kept. Returns ("user@host", server name).
-fn server_login(server: &SubsonicSource, jf: &JellyfinSource, url: &str, user: &str, password: &str) -> anyhow::Result<(String, String)> {
-    use crate::source::{jellyfin, subsonic};
-    if let Some(version) = jellyfin::detect(url) {
-        let l = jellyfin::login(url, user, password)?;
-        jellyfin::save_login(Some(&l))?;
-        subsonic::save_login(None)?;
-        let label = l.label();
-        *jf.login.lock() = Some(l);
-        *server.login.lock() = None;
-        return Ok((label, version));
-    }
-    let l = subsonic::Login::new(url, user, password);
-    let version = subsonic::ping(&l).map_err(|e| {
-        let s = e.to_string();
-        if s.contains("not a Subsonic") || s.contains("answered 404") {
-            anyhow::anyhow!("no Navidrome, Subsonic or Jellyfin server found at this address")
-        } else {
-            e
-        }
-    })?;
-    subsonic::save_login(Some(&l))?;
-    jellyfin::save_login(None)?;
-    let label = l.label();
-    *server.login.lock() = Some(l);
-    *jf.login.lock() = None;
-    Ok((label, version))
+    pub servers: Arc<Servers>,
 }
 
 /// Children of a list node, from the source it belongs to.
 fn children(s: &Srcs, node: &str) -> anyhow::Result<Vec<Item>> {
-    let Srcs { local, radio, podcasts, server, jellyfin } = s;
-    if node.starts_with("jellyfin:") {
-        jellyfin.children(node, Page::ALL)
-    } else if node.starts_with("subsonic:") {
-        server.children(node, Page::ALL)
+    let Srcs { local, radio, podcasts, servers } = s;
+    if let Some(srv) = servers.for_node(node) {
+        srv.source().children(node, Page::ALL)
     } else if node.starts_with("podcast:") {
         podcasts.children(node, Page::ALL)
     } else if node.starts_with("radio:") {
@@ -411,7 +386,7 @@ fn tracks_of(s: &Srcs, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
 }
 
 fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
-    let Srcs { local, radio, podcasts, server, jellyfin } = srcs;
+    let Srcs { local, radio, podcasts, servers } = srcs;
     let send = |m: Msg| {
         let _ = out.send(m);
     };
@@ -575,13 +550,9 @@ fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
                         // Only stations we still know (title shows); others are dropped.
                         return radio.track(&r).ok().filter(|t| !t.title.is_empty()).map(Arc::new);
                     }
-                    if i.source.as_deref() == Some(crate::source::jellyfin::ID) {
-                        let r = TrackRef { source: jellyfin.id().clone(), id: i.path.clone() };
-                        return jellyfin.track(&r).ok().map(Arc::new);
-                    }
-                    if i.source.as_deref() == Some(crate::source::subsonic::ID) {
-                        let r = TrackRef { source: server.id().clone(), id: i.path.clone() };
-                        return server.track(&r).ok().map(Arc::new);
+                    if let Some(srv) = i.source.as_deref().and_then(|id| servers.by_id(id)) {
+                        let r = TrackRef { source: srv.source().id().clone(), id: i.path.clone() };
+                        return srv.source().track(&r).ok().map(Arc::new);
                     }
                     if i.source.as_deref() == Some(crate::source::podcast::ID) {
                         let r = TrackRef { source: podcasts.id().clone(), id: i.path.clone() };
@@ -597,7 +568,7 @@ fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
             send(Msg::Restored { session, tracks });
         }
         // Handled before `run` (own thread).
-        Job::FindStations { .. } | Job::FindServer { .. } | Job::ServerLogin { .. } | Job::ServerScrobble(_) => {}
+        Job::FindStations { .. } | Job::FindServer { .. } | Job::AddServer { .. } | Job::ServerScrobble(_) => {}
         Job::LastfmLogin => {
             // Waits for the browser; must not hold up other jobs.
             let out = out.clone();
