@@ -99,7 +99,24 @@ pub fn search(artist: &str, album: &str) -> Result<Vec<Release>> {
     if q.is_empty() {
         bail!("Fill in album or artist first");
     }
-    let v = get(&format!("{API}/release"), &[("query", q.join(" AND ")), ("fmt", "json".into()), ("limit", "15".into())])?;
+    let mut v = get(&format!("{API}/release"), &[("query", q.join(" AND ")), ("fmt", "json".into()), ("limit", "15".into())])?;
+    // Nothing with the exact spelling ("und" vs "&", typos): search loosely.
+    if v["releases"].as_array().is_none_or(|a| a.is_empty()) {
+        let words = |s: &str| {
+            s.split(|c: char| !c.is_alphanumeric())
+                .filter(|w| w.len() > 2 && !["und", "and", "the", "der", "die", "das"].contains(&w.to_lowercase().as_str()))
+                .map(|w| w.to_string())
+                .collect::<Vec<_>>()
+        };
+        let mut loose = Vec::new();
+        if !album.trim().is_empty() {
+            loose.push(format!("release:({})", words(album).join(" ")));
+        }
+        if !artist.trim().is_empty() {
+            loose.push(format!("artist:({})", words(artist).join(" ")));
+        }
+        v = get(&format!("{API}/release"), &[("query", loose.join(" AND ")), ("fmt", "json".into()), ("limit", "15".into())])?;
+    }
     Ok(v["releases"]
         .as_array()
         .map(|a| {
