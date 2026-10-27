@@ -265,6 +265,11 @@ impl PodcastSource {
             );
             CREATE INDEX IF NOT EXISTS episodes_feed ON episodes(feed, date);",
         )?;
+        // Added later: 1 = downloaded automatically (deleted once played).
+        let has_auto: bool = c.prepare("SELECT auto FROM episodes LIMIT 1").is_ok();
+        if !has_auto {
+            c.execute_batch("ALTER TABLE episodes ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;")?;
+        }
         Ok(Self { id: Arc::from(ID), db: Mutex::new(c), dir, auto_download: AtomicBool::new(true) })
     }
 
@@ -320,6 +325,16 @@ impl PodcastSource {
     /// Remember where you are; near the end counts as played.
     pub fn save_position(&self, episode: &str, ms: u64, duration_ms: u64) {
         let done = duration_ms > 0 && ms + 60_000 >= duration_ms;
+        if done {
+            // Played to the end: automatic downloads are not needed any more.
+            let c = self.db.lock();
+            let auto: Option<String> =
+                c.query_row("SELECT file FROM episodes WHERE id=?1 AND auto=1 AND file IS NOT NULL", [episode], |r| r.get(0)).ok();
+            if let Some(f) = auto {
+                let _ = std::fs::remove_file(f);
+                let _ = c.execute("UPDATE episodes SET file=NULL, auto=0 WHERE id=?1", [episode]);
+            }
+        }
         let _ = self.db.lock().execute(
             "UPDATE episodes SET position=?2, played=CASE WHEN ?3 THEN 1 ELSE played END WHERE id=?1",
             params![episode, if done { 0 } else { ms as i64 }, done],
@@ -343,14 +358,14 @@ impl PodcastSource {
             .context("unknown episode")?;
         if let Some(f) = file {
             let _ = std::fs::remove_file(&f);
-            self.db.lock().execute("UPDATE episodes SET file=NULL WHERE id=?1", [id])?;
+            self.db.lock().execute("UPDATE episodes SET file=NULL, auto=0 WHERE id=?1", [id])?;
             return Ok((title, false));
         }
-        self.download(id, &url)?;
+        self.download(id, &url, false)?;
         Ok((title, true))
     }
 
-    fn download(&self, id: &str, url: &str) -> Result<()> {
+    fn download(&self, id: &str, url: &str, auto: bool) -> Result<()> {
         std::fs::create_dir_all(&self.dir)?;
         let path = self.path_for(id, url);
         let tmp = path.with_extension("part");
@@ -373,7 +388,7 @@ impl PodcastSource {
             return Err(e.into());
         }
         std::fs::rename(&tmp, &path)?;
-        self.db.lock().execute("UPDATE episodes SET file=?2 WHERE id=?1", params![id, path.to_string_lossy()])?;
+        self.db.lock().execute("UPDATE episodes SET file=?2, auto=?3 WHERE id=?1", params![id, path.to_string_lossy(), auto as i64])?;
         Ok(())
     }
 
@@ -400,7 +415,7 @@ impl PodcastSource {
                 })
                 .ok();
             if let Some((id, url, None, 0)) = newest {
-                let _ = self.download(&id, &url);
+                let _ = self.download(&id, &url, true);
             }
         }
     }
@@ -422,7 +437,7 @@ impl PodcastSource {
     fn episodes(&self, where_: &str, p: impl rusqlite::Params) -> Vec<Item> {
         let c = self.db.lock();
         let sql = format!(
-            "SELECT e.id, e.title, e.date, e.duration, e.position, e.played, e.file, s.title, s.image
+            "SELECT e.id, e.title, e.date, e.duration, e.position, e.played, e.file, s.title, s.image, e.auto
              FROM episodes e JOIN shows s ON s.feed = e.feed {where_}"
         );
         let Ok(mut st) = c.prepare(&sql) else { return vec![] };
@@ -434,7 +449,9 @@ impl PodcastSource {
                 r.get::<_, i64>(3)? as u64,
                 r.get::<_, i64>(4)? as u64,
                 r.get::<_, i64>(5)? == 1,
-                r.get::<_, Option<String>>(6)?.and_then(|f| std::fs::metadata(f).ok()).map(|m| m.len()),
+                r.get::<_, Option<String>>(6)?
+                    .and_then(|f| std::fs::metadata(f).ok())
+                    .map(|m| (m.len(), r.get::<_, i64>(9).unwrap_or(0) == 1)),
                 r.get(7)?,
                 r.get(8)?,
             ))
@@ -515,7 +532,7 @@ fn episode_track(
     dur: u64,
     pos: u64,
     played: bool,
-    file: Option<u64>,
+    file: Option<(u64, bool)>,
     show: String,
     image: String,
 ) -> Track {
@@ -531,8 +548,8 @@ fn episode_track(
     } else if pos > 0 {
         info.push(format!("{} min left", (dur.saturating_sub(pos / 1000)).div_ceil(60)));
     }
-    if let Some(bytes) = file {
-        info.push(format!("↓ {}", fmt_size(bytes)));
+    if let Some((bytes, auto)) = file {
+        info.push(format!("↓ {}{}", if auto { "auto " } else { "" }, fmt_size(bytes)));
     }
     Track {
         r: Some(TrackRef { source: Arc::from(ID), id }),
@@ -653,6 +670,34 @@ mod tests {
             f.episodes,
             vec![Episode { guid: "g2".into(), title: "Ep 2".into(), url: "http://x/2.mp3".into(), date: 1_055_217_600, duration_s: 3723 }]
         );
+    }
+
+    #[test]
+    fn played_auto_downloads_are_deleted_but_own_downloads_stay() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = PodcastSource::open(&dir.path().join("p.db"), dir.path().join("dl")).unwrap();
+        let (auto_f, own_f) = (dir.path().join("a.mp3"), dir.path().join("b.mp3"));
+        std::fs::write(&auto_f, b"x").unwrap();
+        std::fs::write(&own_f, b"x").unwrap();
+        {
+            let c = src.db.lock();
+            for (id, f, auto) in [("a", &auto_f, 1), ("b", &own_f, 0)] {
+                c.execute(
+                    "INSERT INTO episodes (id, feed, title, url, date, duration, file, auto) VALUES (?1, 'f', 't', 'u', 0, 600, ?2, ?3)",
+                    params![id, f.to_string_lossy(), auto],
+                )
+                .unwrap();
+            }
+        }
+        // Halfway: nothing is deleted.
+        src.save_position("a", 300_000, 600_000);
+        assert!(auto_f.exists());
+        // Played to the end.
+        src.save_position("a", 590_000, 600_000);
+        src.save_position("b", 590_000, 600_000);
+        assert!(!auto_f.exists());
+        assert!(own_f.exists());
+        assert_eq!(src.position("a"), (0, true));
     }
 
     #[test]

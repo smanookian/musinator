@@ -83,7 +83,7 @@ impl Default for Config {
             save_lyrics_next: false,
             omarchy_bar: false,
             mpris: true,
-            podcast_auto_download: true,
+            podcast_auto_download: false,
             lastfm_scrobble: true,
             lastfm_radio: true,
             eq_on: false,
@@ -299,7 +299,7 @@ pub const SETTINGS: &[Setting] = &[
         "podcast_auto_download",
         "Library",
         "Download new podcast episodes",
-        "Keep the newest episode of each show on disk, so it plays without internet.",
+        "Keep the newest episode of each show on disk (marked \"auto\"; deleted after you played it).",
         Kind::Toggle
     ),
     s!("lastfm", "Desktop", "Last.fm account", "Log in once in the browser. Press again to log out.", Kind::Open),
