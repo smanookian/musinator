@@ -300,6 +300,9 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
         let msg = match (v.kind, app.scan) {
             (ListKind::Queue, _) => "Queue is empty · a adds songs".to_string(),
             _ if v.node == super::RADIO_FIND => "Press enter to search stations by name, genre or country".into(),
+            _ if v.node == super::LASTFM_PROFILE => "Press enter to open your Last.fm profile in the browser".into(),
+            _ if v.node == "lastfm:none" => "This one is not in your library".into(),
+            _ if v.node.starts_with("lastfm:") => "Nothing on Last.fm yet".into(),
             _ if v.node == super::RADIO_ADD => "Press enter to add a station by its web address (it goes to Favorites)".into(),
             _ if v.node == crate::source::radio::FAVORITES => {
                 format!("No favorite stations yet · {} on a station adds it", app.keys.hint(Action::Like))

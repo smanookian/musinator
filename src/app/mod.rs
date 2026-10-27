@@ -129,6 +129,8 @@ pub struct App {
     scrobbler: crate::lastfm::Scrobbler,
     /// The radio song on air now and when it started (scrobbled when the next one starts).
     on_air: Option<(Arc<Track>, Instant)>,
+    /// The song `L` was pressed on (to love it on Last.fm when the like is saved).
+    last_liked: Option<Arc<Track>>,
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
     edited: Vec<crate::model::TrackRef>,
     pub art_file: Option<std::path::PathBuf>,
@@ -361,6 +363,19 @@ impl App {
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
         }
+        if crate::lastfm::user().is_some() {
+            s.push(Side::Blank);
+            s.push(Side::Header("Last.fm"));
+            for (l, n) in [
+                ("Recent", "lastfm:recent"),
+                ("Loved", "lastfm:loved"),
+                ("Top artists", "lastfm:top-artists"),
+                ("Top songs", "lastfm:top-tracks"),
+                ("Open profile", LASTFM_PROFILE),
+            ] {
+                s.push(Side::Node { label: l.into(), node: n.into() });
+            }
+        }
         s.push(Side::Blank);
         s.push(Side::Header("Smart"));
         for (l, n) in [
@@ -411,7 +426,7 @@ impl App {
                 v
             }
             // Searching needs typing: show a hint until enter is pressed.
-            Side::Node { node, label } if node == RADIO_FIND || node == RADIO_ADD => {
+            Side::Node { node, label } if node == RADIO_FIND || node == RADIO_ADD || node == LASTFM_PROFILE => {
                 let mut v = ListView::new(label.trim_end_matches('…').into(), node, ListKind::Node, seq);
                 v.loading = false;
                 v
@@ -423,7 +438,7 @@ impl App {
         let node = view.node.clone();
         let kind = view.kind;
         self.lists = vec![view];
-        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND && node != RADIO_ADD {
+        if kind == ListKind::Node && !node.is_empty() && node != RADIO_FIND && node != RADIO_ADD && node != LASTFM_PROFILE {
             self.worker.send(Job::Children { seq, node });
         }
         if kind == ListKind::Queue {
@@ -620,6 +635,17 @@ impl App {
                 Some(Side::Node { node, .. }) if node == RADIO_FIND => {
                     self.dialog =
                         Some(Dialog::input("Find a station", "Name, genre or country", String::new(), dialogs::InputFor::RadioSearch));
+                }
+                Some(Side::Node { node, .. }) if node == LASTFM_PROFILE => {
+                    if let Some(u) = crate::lastfm::profile_url() {
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg(u)
+                            .stdout(std::process::Stdio::null())
+                            .stderr(std::process::Stdio::null())
+                            .spawn()
+                            .map(|mut c| std::thread::spawn(move || c.wait()));
+                        self.info("Opening your Last.fm profile");
+                    }
                 }
                 Some(Side::Node { node, .. }) if node == RADIO_ADD => {
                     self.dialog = Some(Dialog::input("Add stream address", "Address", String::new(), dialogs::InputFor::RadioUrl));
@@ -903,6 +929,7 @@ impl App {
                     && let Some(t) = tracks.first()
                 {
                     self.worker.send(Job::Like(t.tref().clone()));
+                    self.last_liked = Some(t.clone());
                 }
             }
             Action::EditTags => {
@@ -1226,7 +1253,10 @@ impl App {
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
             Msg::LastfmLogin(r) => match r {
-                Ok(u) => self.info(format!("Last.fm: logged in as {u}")),
+                Ok(u) => {
+                    self.info(format!("Last.fm: logged in as {u}"));
+                    self.rebuild_side();
+                }
                 Err(e) => self.error(e),
             },
             Msg::StreamAdded(r) => match r {
@@ -1273,7 +1303,23 @@ impl App {
                 self.playlists = p;
                 self.rebuild_side();
             }
-            Msg::Liked(on) => self.info(if on { "Liked ♥" } else { "Like removed" }),
+            Msg::Liked(on) => {
+                let mut loved = false;
+                if self.cfg.lastfm_scrobble
+                    && crate::lastfm::user().is_some()
+                    && let Some(p) = self.last_liked.take().and_then(|t| lastfm_play(&t, 0))
+                {
+                    self.scrobbler.love(p, on);
+                    loved = true;
+                }
+                let msg = match (on, loved) {
+                    (true, true) => "Liked ♥ (and loved on Last.fm)",
+                    (true, false) => "Liked ♥",
+                    (false, true) => "Like removed (also on Last.fm)",
+                    (false, false) => "Like removed",
+                };
+                self.info(msg);
+            }
             Msg::Info(s) => self.info(s),
             Msg::Error(s) => self.error(s),
             Msg::PlaylistChanged(id) => self.reload_lists_matching(&format!("playlist:{id}")),
@@ -1527,6 +1573,8 @@ fn lastfm_play(t: &Track, at: i64) -> Option<crate::lastfm::Play> {
 pub const RADIO_FIND: &str = "radio:find";
 /// Sidebar entry that asks for a stream address.
 pub const RADIO_ADD: &str = "radio:add";
+/// Sidebar entry that opens the Last.fm profile in the browser.
+pub const LASTFM_PROFILE: &str = "lastfm:profile";
 
 /// A background part ended unexpectedly.
 fn stopped(what: &str) -> anyhow::Error {
@@ -1612,6 +1660,7 @@ pub fn run(cfg: Config) -> Result<()> {
         edited: Vec::new(),
         scrobbler: crate::lastfm::Scrobbler::start(),
         on_air: None,
+        last_liked: None,
         sources,
         worker,
         art,

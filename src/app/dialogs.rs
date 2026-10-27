@@ -1450,6 +1450,7 @@ fn open_setting(app: &mut App, key: &str) -> bool {
             if let Some(u) = crate::lastfm::user() {
                 crate::lastfm::logout();
                 app.info(format!("Logged out of Last.fm ({u})"));
+                app.rebuild_side();
             } else {
                 app.info("Opening Last.fm in your browser… press Allow there");
                 app.send_job(Job::LastfmLogin);

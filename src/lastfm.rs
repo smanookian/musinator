@@ -183,6 +183,7 @@ fn track_params(p: &Play, idx: Option<usize>) -> BTreeMap<String, String> {
 enum Cmd {
     NowPlaying(Play),
     Scrobble(Play),
+    Love(Play, bool),
 }
 
 /// Handle to the Last.fm thread. Sending never blocks.
@@ -201,6 +202,10 @@ impl Scrobbler {
     }
     pub fn scrobble(&self, p: Play) {
         let _ = self.tx.send(Cmd::Scrobble(p));
+    }
+    /// Love (true) or unlove a song on Last.fm.
+    pub fn love(&self, p: Play, on: bool) {
+        let _ = self.tx.send(Cmd::Love(p, on));
     }
 }
 
@@ -244,6 +249,16 @@ fn run(rx: cb::Receiver<Cmd>) {
                     let _ = call("track.updateNowPlaying", m, true);
                 }
             }
+            Ok(Cmd::Love(p, on)) => {
+                s = load();
+                if !s.session.is_empty() {
+                    let mut m = BTreeMap::new();
+                    m.insert("artist".to_string(), p.artist);
+                    m.insert("track".to_string(), p.title);
+                    m.insert("sk".to_string(), s.session.clone());
+                    let _ = call(if on { "track.love" } else { "track.unlove" }, m, true);
+                }
+            }
             Ok(Cmd::Scrobble(p)) => {
                 s = load();
                 if s.session.is_empty() {
@@ -264,6 +279,91 @@ fn run(rx: cb::Receiver<Cmd>) {
             Err(cb::RecvTimeoutError::Disconnected) => return,
         }
     }
+}
+
+/// One row of a Last.fm list.
+pub struct Entry {
+    pub artist: String,
+    /// Empty for artist lists.
+    pub title: String,
+    /// "5 min ago", "123 plays", "now playing".
+    pub note: String,
+}
+
+pub const PERIODS: [(&str, &str); 4] = [("7day", "This week"), ("1month", "This month"), ("12month", "This year"), ("overall", "All time")];
+
+fn ago(t: i64) -> String {
+    let d = (now() - t).max(0);
+    match d {
+        0..60 => "just now".into(),
+        60..3600 => format!("{} min ago", d / 60),
+        3600..86_400 => format!("{} h ago", d / 3600),
+        86_400..2_592_000 => format!("{} days ago", d / 86_400),
+        2_592_000..31_536_000 => format!("{} months ago", d / 2_592_000),
+        _ => format!("{} years ago", d / 31_536_000),
+    }
+}
+
+fn arr(v: &Value) -> Vec<Value> {
+    match v {
+        Value::Array(a) => a.clone(),
+        Value::Object(_) => vec![v.clone()],
+        _ => vec![],
+    }
+}
+
+/// Recent, loved or top lists of the logged-in user. `what`: "recent", "loved",
+/// "artists:<period>", "tracks:<period>".
+pub fn list(what: &str) -> Result<Vec<Entry>> {
+    let user = user().ok_or_else(|| anyhow::anyhow!("Not logged in to Last.fm"))?;
+    let mut p = BTreeMap::new();
+    p.insert("user".to_string(), user);
+    p.insert("limit".to_string(), "100".to_string());
+    let (method, period) = match what.split_once(':') {
+        Some(("artists", per)) => ("user.getTopArtists", Some(per)),
+        Some(("tracks", per)) => ("user.getTopTracks", Some(per)),
+        _ if what == "loved" => ("user.getLovedTracks", None),
+        _ => ("user.getRecentTracks", None),
+    };
+    if let Some(per) = period {
+        p.insert("period".to_string(), per.to_string());
+    }
+    let v = call(method, p, false)?;
+    let s = |v: &Value| v.as_str().unwrap_or("").to_string();
+    let plays = |v: &Value| format!("{} plays", s(&v["playcount"]));
+    Ok(match method {
+        "user.getRecentTracks" => arr(&v["recenttracks"]["track"])
+            .iter()
+            .map(|t| Entry {
+                artist: s(&t["artist"]["#text"]),
+                title: s(&t["name"]),
+                note: if t["@attr"]["nowplaying"] == "true" {
+                    "now playing".into()
+                } else {
+                    s(&t["date"]["uts"]).parse().map(ago).unwrap_or_default()
+                },
+            })
+            .collect(),
+        "user.getLovedTracks" => arr(&v["lovedtracks"]["track"])
+            .iter()
+            .map(|t| Entry {
+                artist: s(&t["artist"]["name"]),
+                title: s(&t["name"]),
+                note: s(&t["date"]["uts"]).parse().map(ago).unwrap_or_default(),
+            })
+            .collect(),
+        "user.getTopArtists" => {
+            arr(&v["topartists"]["artist"]).iter().map(|a| Entry { artist: s(&a["name"]), title: String::new(), note: plays(a) }).collect()
+        }
+        _ => arr(&v["toptracks"]["track"])
+            .iter()
+            .map(|t| Entry { artist: s(&t["artist"]["name"]), title: s(&t["name"]), note: plays(t) })
+            .collect(),
+    })
+}
+
+pub fn profile_url() -> Option<String> {
+    user().map(|u| format!("https://www.last.fm/user/{u}"))
 }
 
 pub fn now() -> i64 {

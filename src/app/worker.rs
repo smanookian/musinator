@@ -216,7 +216,55 @@ impl Worker {
 
 /// Children of a list node, from the source it belongs to.
 fn children(local: &LocalSource, radio: &RadioSource, node: &str) -> anyhow::Result<Vec<Item>> {
-    if node.starts_with("radio:") { radio.children(node, Page::ALL) } else { local.children(node, Page::ALL) }
+    if node.starts_with("radio:") {
+        radio.children(node, Page::ALL)
+    } else if let Some(what) = node.strip_prefix("lastfm:") {
+        lastfm_children(local, what)
+    } else {
+        local.children(node, Page::ALL)
+    }
+}
+
+/// Last.fm lists: songs and artists in your library open/play as usual; others are shown greyed.
+fn lastfm_children(local: &LocalSource, what: &str) -> anyhow::Result<Vec<Item>> {
+    use crate::source::{Node, NodeKind};
+    let node = |id: String, kind, title: String, subtitle: String| Item::Node(Node { id, kind, title, subtitle, count: None, art: None });
+    if let Some(kind) = what.strip_prefix("top-") {
+        return Ok(crate::lastfm::PERIODS
+            .iter()
+            .map(|(p, label)| node(format!("lastfm:{kind}:{p}"), NodeKind::Folder, label.to_string(), String::new()))
+            .collect());
+    }
+    if what == "none" || what == "profile" {
+        return Ok(vec![]);
+    }
+    let src = local.id().clone();
+    let c = local.conn();
+    let mut out = Vec::new();
+    for e in crate::lastfm::list(what)? {
+        if e.title.is_empty() {
+            let have: Option<String> =
+                c.query_row("SELECT artist FROM albums WHERE lower(artist) = lower(?1) LIMIT 1", [&e.artist], |r| r.get(0)).ok();
+            out.push(match have {
+                Some(a) => node(format!("artist:{a}"), NodeKind::Artist, a, e.note),
+                None => node("lastfm:none".into(), NodeKind::Genre, e.artist, format!("{} · not in your library", e.note)),
+            });
+            continue;
+        }
+        let found = db::tracks(
+            &c,
+            &src,
+            "WHERE lower(t.artist) = lower(?1) AND lower(t.title) = lower(?2) LIMIT 1",
+            rusqlite::params![e.artist, e.title],
+        )
+        .ok()
+        .and_then(|v| v.into_iter().next());
+        out.push(match found {
+            Some(t) => Item::Track(t),
+            None => node("lastfm:none".into(), NodeKind::Genre, e.title, format!("{} · {} · not in your library", e.artist, e.note)),
+        });
+    }
+    Ok(out)
 }
 
 fn tracks_of(local: &LocalSource, radio: &RadioSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
