@@ -10,6 +10,7 @@
 pub mod local;
 pub mod podcast;
 pub mod radio;
+pub mod subsonic;
 
 use std::collections::HashMap;
 use std::sync::Arc;

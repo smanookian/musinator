@@ -142,7 +142,7 @@ fn fetch_feed(url: &str) -> Result<Feed> {
 
 /// An episode file over HTTP that can seek (Range requests), so streamed
 /// episodes support seeking and resuming like downloaded ones.
-struct HttpFile {
+pub(crate) struct HttpFile {
     url: String,
     len: u64,
     pos: u64,
@@ -150,7 +150,7 @@ struct HttpFile {
 }
 
 impl HttpFile {
-    fn open(url: &str) -> Result<Self> {
+    pub(crate) fn open(url: &str) -> Result<Self> {
         let mut f = Self { url: url.to_string(), len: 0, pos: 0, body: None };
         let resp = f.request(0)?;
         f.len = resp.headers().get("content-length").and_then(|v| v.to_str().ok()?.parse().ok()).unwrap_or(0);
@@ -234,7 +234,7 @@ impl symphonia::core::io::MediaSource for HttpFile {
     }
 }
 
-fn ext_of(url: &str) -> String {
+pub(crate) fn ext_of(url: &str) -> String {
     let path = url.split(['?', '#']).next().unwrap_or(url);
     let e = path.rsplit('.').next().unwrap_or("mp3").to_ascii_lowercase();
     if matches!(e.as_str(), "mp3" | "m4a" | "aac" | "ogg" | "opus" | "mp4") { e } else { "mp3".into() }

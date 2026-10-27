@@ -49,6 +49,9 @@ pub enum InputFor {
     Import,
     RadioUrl,
     Podcast,
+    ServerUrl,
+    ServerUser(String),
+    ServerPass(String, String),
 }
 
 pub enum Dialog {
@@ -637,7 +640,8 @@ impl Dialog {
                     return false;
                 }
                 if k.code == KeyCode::Enter {
-                    let v = value.trim().to_string();
+                    // Passwords may start or end with spaces.
+                    let v = if matches!(what, InputFor::ServerPass(..)) { value.clone() } else { value.trim().to_string() };
                     if v.is_empty() {
                         return true;
                     }
@@ -647,6 +651,16 @@ impl Dialog {
                         InputFor::RenamePlaylist(id) => app.send_job(Job::RenamePlaylist { id, name: v }),
                         InputFor::Export(id) => app.send_job(Job::Export { id, path: crate::config::expand(&v) }),
                         InputFor::Import => app.send_job(Job::Import { path: crate::config::expand(&v) }),
+                        InputFor::ServerUrl => {
+                            app.dialog = Some(Dialog::input("Music server", "User name", String::new(), InputFor::ServerUser(v)));
+                        }
+                        InputFor::ServerUser(url) => {
+                            app.dialog = Some(Dialog::input("Music server", "Password", String::new(), InputFor::ServerPass(url, v)));
+                        }
+                        InputFor::ServerPass(url, user) => {
+                            app.info("Connecting to the music server…");
+                            app.send_job(Job::ServerLogin(crate::source::subsonic::Login::new(&url, &user, &v)));
+                        }
                         InputFor::Podcast if v.starts_with("http://") || v.starts_with("https://") => {
                             app.info("Checking the feed…");
                             app.send_job(Job::Subscribe(v));
@@ -887,13 +901,16 @@ impl Dialog {
                 put(b, inner.x + 2, inner.y + 1, msg, inner.width - 4, bold);
                 hints_row(b, inner, "y yes · esc cancel", muted);
             }
-            Dialog::Input { title, label, value, .. } => {
+            Dialog::Input { title, label, value, what } => {
                 let inner = frame(f, app, 60, 6, title);
                 let b = f.buffer_mut();
-                put(b, inner.x + 2, inner.y + 1, label, 12, muted);
+                put(b, inner.x + 2, inner.y + 1, label, inner.width.saturating_sub(4), muted);
                 let field = Rect { x: inner.x + 2, y: inner.y + 2, width: inner.width - 4, height: 1 };
                 fill(b, field, t.title_bar);
-                let shown = tail(value, field.width as usize - 2);
+                // Passwords show as dots.
+                let secret = matches!(what, InputFor::ServerPass(..));
+                let value = if secret { "•".repeat(value.chars().count()) } else { value.clone() };
+                let shown = tail(&value, field.width as usize - 2);
                 put(b, field.x + 1, field.y, &format!("{shown}▏"), field.width - 1, Style::default().fg(c(t.fg)).bg(c(t.title_bar)));
                 hints_row(b, inner, "enter ok · esc cancel", muted);
             }
@@ -1350,6 +1367,7 @@ fn flat_hits(app: &App) -> Vec<Item> {
     v.extend(h.albums.iter().cloned().map(Item::Node));
     v.extend(h.tracks.iter().cloned().map(Item::Track));
     v.extend(h.playlists.iter().cloned().map(Item::Node));
+    v.extend(app.server_hits.iter().cloned());
     if app.stations_only {
         v.clear();
     }
@@ -1359,6 +1377,8 @@ fn flat_hits(app: &App) -> Vec<Item> {
 
 fn section_of(i: &Item) -> &'static str {
     match i {
+        Item::Node(n) if n.id.starts_with("subsonic:") => "On your music server",
+        Item::Track(t) if t.r.as_ref().is_some_and(|r| &*r.source == crate::source::subsonic::ID) => "On your music server",
         Item::Track(t) if super::draw::is_live(t) => "Stations",
         Item::Track(_) => "Songs",
         Item::Node(n) => match n.kind {
@@ -1480,6 +1500,16 @@ fn open_setting(app: &mut App, key: &str) -> bool {
         "keys" => app.dialog = Some(Dialog::Keys { cursor: 0, offset: 0, capture: false, msg: None }),
         "music_folders" => app.dialog = Some(Dialog::Folders { cursor: 0, changed: false }),
         "import_playlist" => app.dialog = Some(Dialog::input("Import playlist", "File", "~/".into(), InputFor::Import)),
+        "server" => {
+            let old = app.server.login.lock().take();
+            if let Some(l) = old {
+                let _ = crate::source::subsonic::save_login(None);
+                app.info(format!("Music server disconnected ({})", l.label()));
+                app.rebuild_side();
+                return false;
+            }
+            app.dialog = Some(Dialog::input("Music server", "Address (e.g. http://192.168.1.5:4533)", String::new(), InputFor::ServerUrl));
+        }
         "lastfm" => {
             if let Some(u) = crate::lastfm::user() {
                 crate::lastfm::logout();

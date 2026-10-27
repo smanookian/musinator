@@ -185,6 +185,9 @@ pub struct App {
     pub podcasts: Arc<crate::source::podcast::PodcastSource>,
     /// Total size of podcast downloads ("1.2 GB"), updated when the Downloads list loads.
     pub downloads_label: String,
+    pub server: Arc<crate::source::subsonic::SubsonicSource>,
+    /// Music server results for the main search.
+    pub server_hits: Vec<Item>,
     /// When the episode position was last saved.
     podcast_saved: Instant,
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
@@ -476,6 +479,18 @@ impl App {
             ("Add stream address…", RADIO_ADD),
         ] {
             s.push(Side::Node { label: l.into(), node: n.into() });
+        }
+        if self.server.login.lock().is_some() {
+            s.push(Side::Blank);
+            s.push(Side::Header("Music server"));
+            for (l, n) in [
+                ("Artists", crate::source::subsonic::ARTISTS),
+                ("Albums", crate::source::subsonic::ALBUMS),
+                ("Recently added", crate::source::subsonic::NEWEST),
+                ("Playlists", crate::source::subsonic::PLAYLISTS),
+            ] {
+                s.push(Side::Node { label: l.into(), node: n.into() });
+            }
         }
         s.push(Side::Blank);
         s.push(Side::Header("Podcasts"));
@@ -1381,6 +1396,9 @@ impl App {
                 if listened >= need
                     && let Some(r) = track.r.clone()
                 {
+                    if &*r.source == crate::source::subsonic::ID {
+                        self.worker.send(Job::ServerScrobble(r.id.clone()));
+                    }
                     self.worker.send(Job::RecordPlay(r));
                 }
                 // Songs with a length (not radio, which is handled per song on air).
@@ -1480,6 +1498,18 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::ServerHits { seq, items } => {
+                if seq == self.search_seq {
+                    self.server_hits = items;
+                }
+            }
+            Msg::ServerLogin(r) => match r {
+                Ok((label, version)) => {
+                    self.info(format!("Music server connected: {label} ({version})"));
+                    self.rebuild_side();
+                }
+                Err(e) => self.error(e),
+            },
             Msg::Subscribed { title, on } => {
                 self.info(if on { format!("Subscribed to {title}") } else { format!("Unsubscribed from {title}") });
                 self.reload_lists_matching(crate::source::podcast::SHOWS);
@@ -1772,6 +1802,7 @@ impl App {
         self.stations_only = stations_only;
         self.search_hits = Default::default();
         self.search_stations.clear();
+        self.server_hits.clear();
         self.stations_busy = false;
         self.dialog = Some(Dialog::search());
     }
@@ -1783,6 +1814,10 @@ impl App {
         self.stations_busy = q.trim().chars().count() >= 3;
         if self.stations_busy {
             self.worker.send(Job::FindStations { seq, query: q.trim().to_string() });
+        }
+        self.server_hits.clear();
+        if !self.stations_only && q.trim().chars().count() >= 2 && self.server.login.lock().is_some() {
+            self.worker.send(Job::FindServer { seq, query: q.trim().to_string() });
         }
         if !self.stations_only {
             self.worker.send(Job::Search { seq, query: q });
@@ -1872,6 +1907,8 @@ pub fn run(cfg: Config) -> Result<()> {
     podcasts.auto_download.store(cfg.podcast_auto_download, std::sync::atomic::Ordering::Relaxed);
     podcasts.start_refresher();
     sources.add(podcasts.clone());
+    let server = Arc::new(crate::source::subsonic::SubsonicSource::new());
+    sources.add(server.clone());
     let sources = Arc::new(sources);
     let engine = Engine::start(sources.clone(), cfg.volume, cfg.gain())?;
     engine.set_eq(cfg.eq_on, &cfg.eq_bands);
@@ -1909,7 +1946,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
     })?;
     let (w_tx, w_rx) = cb::unbounded();
-    let worker = Worker::start(local, radio, podcasts.clone(), w_tx);
+    let worker = Worker::start(local, radio, podcasts.clone(), server.clone(), w_tx);
     let (a_tx, a_rx) = cb::unbounded();
     let images_on = cfg.images != "off";
     let art = images_on.then(|| ArtWorker::start(sources.clone(), picker.clone(), a_tx.clone()));
@@ -1946,6 +1983,8 @@ pub fn run(cfg: Config) -> Result<()> {
         last_liked: None,
         podcasts,
         downloads_label: String::new(),
+        server,
+        server_hits: Vec::new(),
         podcast_saved: Instant::now(),
         sources,
         worker,

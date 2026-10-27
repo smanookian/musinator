@@ -367,7 +367,7 @@ fn list_pane(f: &mut Frame, app: &mut App, area: Rect) {
     if v.cursor >= v.offset + rows {
         v.offset = v.cursor + 1 - rows;
     }
-    let album_view = v.node.starts_with("album:");
+    let album_view = v.node.starts_with("album:") || v.node.starts_with("subsonic:album:");
     let (offset, cursor) = (v.offset, v.cursor);
     let items: Vec<Item> = v.items[offset..(offset + rows).min(v.items.len())].to_vec();
     let buf = f.buffer_mut();

@@ -11,6 +11,7 @@ use crate::model::{Track, TrackRef};
 use crate::source::local::LocalSource;
 use crate::source::podcast::PodcastSource;
 use crate::source::radio::RadioSource;
+use crate::source::subsonic::SubsonicSource;
 use crate::source::{Item, Lyrics, Page, SearchHits, Source};
 
 /// What to do with resolved tracks.
@@ -69,6 +70,14 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    /// Music server search for the main search box (own thread).
+    FindServer {
+        seq: u64,
+        query: String,
+    },
+    /// Check and save a music server login.
+    ServerLogin(crate::source::subsonic::Login),
+    ServerScrobble(String),
     /// Subscribe to / unsubscribe from a podcast feed.
     Subscribe(String),
     /// Download an episode, or delete its download.
@@ -142,6 +151,12 @@ pub enum Job {
 }
 
 pub enum Msg {
+    ServerHits {
+        seq: u64,
+        items: Vec<Item>,
+    },
+    /// ("user@host", server version) or why not.
+    ServerLogin(Result<(String, String), String>),
     Subscribed {
         title: String,
         on: bool,
@@ -206,7 +221,13 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn start(local: Arc<LocalSource>, radio: Arc<RadioSource>, podcasts: Arc<PodcastSource>, out: cb::Sender<Msg>) -> Self {
+    pub fn start(
+        local: Arc<LocalSource>,
+        radio: Arc<RadioSource>,
+        podcasts: Arc<PodcastSource>,
+        server: Arc<SubsonicSource>,
+        out: cb::Sender<Msg>,
+    ) -> Self {
         let radio_search = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let (tx, rx) = cb::unbounded::<Job>();
         std::thread::Builder::new()
@@ -225,7 +246,32 @@ impl Worker {
                             find_stations(&radio, &radio_search, seq, query, &out);
                             continue;
                         }
-                        run(&local, &radio, &podcasts, j, &out);
+                        if let Job::FindServer { seq, query } = j {
+                            let (server, out) = (server.clone(), out.clone());
+                            std::thread::spawn(move || {
+                                let _ = out.send(Msg::ServerHits { seq, items: server.find(&query).unwrap_or_default() });
+                            });
+                            continue;
+                        }
+                        if let Job::ServerLogin(login) = j {
+                            let (server, out) = (server.clone(), out.clone());
+                            std::thread::spawn(move || {
+                                let r = crate::source::subsonic::ping(&login).and_then(|v| {
+                                    crate::source::subsonic::save_login(Some(&login))?;
+                                    let label = login.label();
+                                    *server.login.lock() = Some(login);
+                                    Ok((label, v))
+                                });
+                                let _ = out.send(Msg::ServerLogin(r.map_err(|e| format!("Music server: {e:#}"))));
+                            });
+                            continue;
+                        }
+                        if let Job::ServerScrobble(id) = j {
+                            let server = server.clone();
+                            std::thread::spawn(move || server.scrobble(&id));
+                            continue;
+                        }
+                        run(&local, &radio, &podcasts, &server, j, &out);
                     }
                 }
             })
@@ -255,8 +301,16 @@ fn find_stations(radio: &Arc<RadioSource>, latest: &Arc<std::sync::atomic::Atomi
 }
 
 /// Children of a list node, from the source it belongs to.
-fn children(local: &LocalSource, radio: &RadioSource, podcasts: &PodcastSource, node: &str) -> anyhow::Result<Vec<Item>> {
-    if node.starts_with("podcast:") {
+fn children(
+    local: &LocalSource,
+    radio: &RadioSource,
+    podcasts: &PodcastSource,
+    server: &SubsonicSource,
+    node: &str,
+) -> anyhow::Result<Vec<Item>> {
+    if node.starts_with("subsonic:") {
+        server.children(node, Page::ALL)
+    } else if node.starts_with("podcast:") {
         podcasts.children(node, Page::ALL)
     } else if node.starts_with("radio:") {
         radio.children(node, Page::ALL)
@@ -309,25 +363,33 @@ fn lastfm_children(local: &LocalSource, what: &str) -> anyhow::Result<Vec<Item>>
     Ok(out)
 }
 
-fn tracks_of(local: &LocalSource, radio: &RadioSource, podcasts: &PodcastSource, node: &str, depth: u32, out: &mut Vec<Arc<Track>>) {
-    let Ok(items) = children(local, radio, podcasts, node) else { return };
+fn tracks_of(
+    local: &LocalSource,
+    radio: &RadioSource,
+    podcasts: &PodcastSource,
+    server: &SubsonicSource,
+    node: &str,
+    depth: u32,
+    out: &mut Vec<Arc<Track>>,
+) {
+    let Ok(items) = children(local, radio, podcasts, server, node) else { return };
     for it in items {
         match it {
             Item::Track(t) => out.push(t),
-            Item::Node(n) if depth > 0 => tracks_of(local, radio, podcasts, &n.id, depth - 1, out),
+            Item::Node(n) if depth > 0 => tracks_of(local, radio, podcasts, server, &n.id, depth - 1, out),
             Item::Node(_) => {}
         }
     }
 }
 
-fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, job: Job, out: &cb::Sender<Msg>) {
+fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, server: &SubsonicSource, job: Job, out: &cb::Sender<Msg>) {
     let send = |m: Msg| {
         let _ = out.send(m);
     };
     let err = |e: anyhow::Error| Msg::Error(format!("{e:#}"));
     match job {
         Job::Children { seq, node } => {
-            send(Msg::Children { seq, items: children(local, radio, podcasts, &node).map_err(|e| format!("{e:#}")) })
+            send(Msg::Children { seq, items: children(local, radio, podcasts, server, &node).map_err(|e| format!("{e:#}")) })
         }
         Job::Search { seq, query } => send(Msg::Search { seq, hits: local.search(&query, 50).unwrap_or_default() }),
         Job::Lyrics { track } => {
@@ -337,7 +399,7 @@ fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, 
         }
         Job::Tracks { nodes, mut tracks, then } => {
             for n in nodes {
-                tracks_of(local, radio, podcasts, &n, 3, &mut tracks);
+                tracks_of(local, radio, podcasts, server, &n, 3, &mut tracks);
             }
             match then {
                 Then::AddToPlaylist(id) => {
@@ -486,6 +548,10 @@ fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, 
                         // Only stations we still know (title shows); others are dropped.
                         return radio.track(&r).ok().filter(|t| !t.title.is_empty()).map(Arc::new);
                     }
+                    if i.source.as_deref() == Some(crate::source::subsonic::ID) {
+                        let r = TrackRef { source: server.id().clone(), id: i.path.clone() };
+                        return server.track(&r).ok().map(Arc::new);
+                    }
                     if i.source.as_deref() == Some(crate::source::podcast::ID) {
                         let r = TrackRef { source: podcasts.id().clone(), id: i.path.clone() };
                         return podcasts.track(&r).ok().map(Arc::new);
@@ -500,7 +566,7 @@ fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, 
             send(Msg::Restored { session, tracks });
         }
         // Handled before `run` (own thread).
-        Job::FindStations { .. } => {}
+        Job::FindStations { .. } | Job::FindServer { .. } | Job::ServerLogin(_) | Job::ServerScrobble(_) => {}
         Job::LastfmLogin => {
             // Waits for the browser; must not hold up other jobs.
             let out = out.clone();
@@ -512,7 +578,7 @@ fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, 
         // Podcast episode: "like" means subscribe to its show.
         Job::Like(r) if &*r.source == crate::source::podcast::ID => {
             if let Some(feed) = podcasts.feed_of(&r.id) {
-                run(local, radio, podcasts, Job::Subscribe(feed), out);
+                run(local, radio, podcasts, server, Job::Subscribe(feed), out);
             }
         }
         Job::Subscribe(feed) => match podcasts.toggle_subscription(&feed) {
@@ -542,7 +608,7 @@ fn run(local: &LocalSource, radio: &RadioSource, podcasts: &Arc<PodcastSource>, 
         Job::Playlists => send(Msg::Playlists(db::playlists(&local.conn()).unwrap_or_default())),
         Job::NewPlaylist { name, nodes, mut tracks } => {
             for n in nodes {
-                tracks_of(local, radio, podcasts, &n, 3, &mut tracks);
+                tracks_of(local, radio, podcasts, server, &n, 3, &mut tracks);
             }
             let res = (|| {
                 let mut c = local.conn();

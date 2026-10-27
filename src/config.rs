@@ -295,6 +295,7 @@ pub const SETTINGS: &[Setting] = &[
     ),
     s!("mpris", "Desktop", "Media keys (MPRIS)", "Media keys, playerctl and the Omarchy media controls.", Kind::Toggle),
     s!("notifications", "Desktop", "Notify on track change", "Desktop notification when a new song starts.", Kind::Toggle),
+    s!("server", "Library", "Music server", "Navidrome or another Subsonic server. Press again to disconnect.", Kind::Open),
     s!(
         "podcast_auto_download",
         "Library",
@@ -355,6 +356,7 @@ impl Config {
             "lastfm" => crate::lastfm::user().map(|u| format!("Logged in as {u}")).unwrap_or_else(|| "Not connected".into()),
             "lastfm_scrobble" => on(self.lastfm_scrobble),
             "podcast_auto_download" => on(self.podcast_auto_download),
+            "server" => crate::source::subsonic::load_login().map(|l| l.label()).unwrap_or_else(|| "Not set up".into()),
             "lastfm_radio" => on(self.lastfm_radio),
             "notifications" => on(self.notifications),
             _ => String::new(),
