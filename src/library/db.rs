@@ -183,6 +183,7 @@ pub fn track_from_row(src: &SourceId, r: &Row) -> rusqlite::Result<Track> {
         },
         art,
         rating: r.get::<_, Option<i64>>(23)?.filter(|v| (1..=5).contains(v)).map(|v| v as u8),
+        on_air: false,
         r: Some(TrackRef { source: src.clone(), id: path }),
     })
 }

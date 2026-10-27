@@ -1446,6 +1446,16 @@ fn open_setting(app: &mut App, key: &str) -> bool {
         "keys" => app.dialog = Some(Dialog::Keys { cursor: 0, offset: 0, capture: false, msg: None }),
         "music_folders" => app.dialog = Some(Dialog::Folders { cursor: 0, changed: false }),
         "import_playlist" => app.dialog = Some(Dialog::input("Import playlist", "File", "~/".into(), InputFor::Import)),
+        "lastfm" => {
+            if let Some(u) = crate::lastfm::user() {
+                crate::lastfm::logout();
+                app.info(format!("Logged out of Last.fm ({u})"));
+            } else {
+                app.info("Opening Last.fm in your browser… press Allow there");
+                app.send_job(Job::LastfmLogin);
+            }
+            return false;
+        }
         "rescan" => {
             app.lib.scan();
             app.info("Scanning music folders");

@@ -551,6 +551,7 @@ impl Stream for RadioStream {
             Some((a, b)) => {
                 t.artist = a.trim().to_string();
                 t.title = b.trim().to_string();
+                t.on_air = !t.artist.is_empty() && !t.title.is_empty();
             }
             None => match now {
                 Some(s) => {

@@ -5,6 +5,7 @@ mod decode;
 mod engine;
 mod ipc;
 mod keys;
+mod lastfm;
 mod library;
 mod model;
 mod mpris;

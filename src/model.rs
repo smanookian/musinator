@@ -102,6 +102,8 @@ pub struct Track {
     pub art: Option<ArtRef>,
     /// 1..=5 stars.
     pub rating: Option<u8>,
+    /// A song on air in a radio stream, with real artist and title.
+    pub on_air: bool,
 }
 
 impl Track {

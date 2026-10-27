@@ -126,6 +126,9 @@ pub struct App {
     pub images_on: bool,
     pub pics: Vec<(Slot, Pic)>,
     pub grid_pics: std::collections::HashMap<ArtRef, Pic>,
+    scrobbler: crate::lastfm::Scrobbler,
+    /// The radio song on air now and when it started (scrobbled when the next one starts).
+    on_air: Option<(Arc<Track>, Instant)>,
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
     edited: Vec<crate::model::TrackRef>,
     pub art_file: Option<std::path::PathBuf>,
@@ -221,6 +224,34 @@ impl App {
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => self.error("mpv is not installed (sudo pacman -S mpv)"),
             Err(e) => self.error(format!("Can't start mpv: {e}")),
+        }
+    }
+
+    /// Last.fm "now playing", and scrobbles for radio songs when the next one starts.
+    fn lastfm_track(&mut self, t: Option<&Arc<Track>>) {
+        if let Some((prev, since)) = self.on_air.take()
+            && t.is_some_and(|t| t.r == prev.r && (t.title != prev.title || t.artist != prev.artist))
+            && self.cfg.lastfm_scrobble
+            && self.cfg.lastfm_radio
+            && crate::lastfm::counts(None, since.elapsed())
+            && let Some(p) = lastfm_play(&prev, crate::lastfm::now() - since.elapsed().as_secs() as i64)
+        {
+            self.scrobbler.scrobble(p);
+        }
+        let Some(t) = t else { return };
+        if draw::is_live(t) {
+            if !t.on_air {
+                return;
+            }
+            self.on_air = Some((t.clone(), Instant::now()));
+            if !self.cfg.lastfm_radio {
+                return;
+            }
+        }
+        if self.cfg.lastfm_scrobble
+            && let Some(p) = lastfm_play(t, crate::lastfm::now())
+        {
+            self.scrobbler.now_playing(p);
         }
     }
 
@@ -1061,6 +1092,7 @@ impl App {
     fn on_engine(&mut self, e: EngineEvent) {
         match e {
             EngineEvent::Track(t) => {
+                self.lastfm_track(t.as_ref());
                 if let Some(t) = &t {
                     if let Some(r) = t.r.clone()
                         && self.lyrics.as_ref().is_none_or(|(lr, _)| *lr != r)
@@ -1084,6 +1116,10 @@ impl App {
                 self.mpris_update();
             }
             EngineEvent::State(s) => {
+                // Radio pause is a stop: the song on air was not heard to its end.
+                if s != PlayState::Playing {
+                    self.on_air = None;
+                }
                 if s == PlayState::Stopped && matches!(self.sleep, Some(Sleep::Track | Sleep::Album)) {
                     self.sleep = None;
                     self.info("Sleep timer: stopped");
@@ -1107,6 +1143,15 @@ impl App {
                     && let Some(r) = track.r.clone()
                 {
                     self.worker.send(Job::RecordPlay(r));
+                }
+                // Songs with a length (not radio, which is handled per song on air).
+                if self.cfg.lastfm_scrobble
+                    && track.duration_ms.is_some()
+                    && !draw::is_live(&track)
+                    && crate::lastfm::counts(track.duration_ms, listened)
+                    && let Some(p) = lastfm_play(&track, crate::lastfm::now() - listened.as_secs() as i64)
+                {
+                    self.scrobbler.scrobble(p);
                 }
             }
         }
@@ -1180,6 +1225,10 @@ impl App {
                 }
             }
             Msg::Tracks { tracks, then } => self.on_tracks(tracks, then),
+            Msg::LastfmLogin(r) => match r {
+                Ok(u) => self.info(format!("Last.fm: logged in as {u}")),
+                Err(e) => self.error(e),
+            },
             Msg::StreamAdded(r) => match r {
                 Ok(name) => {
                     self.info(format!("Added {name} to radio favorites"));
@@ -1460,6 +1509,20 @@ pub fn album_title(t: &Track) -> String {
 }
 
 /// Start the TUI.
+/// What Last.fm gets for a song; None without artist or title.
+fn lastfm_play(t: &Track, at: i64) -> Option<crate::lastfm::Play> {
+    let live = draw::is_live(t);
+    (!t.artist.is_empty() && !t.title.is_empty()).then(|| crate::lastfm::Play {
+        artist: t.artist.clone(),
+        title: t.title.clone(),
+        // The station name is not an album.
+        album: if live { String::new() } else { t.album.clone() },
+        album_artist: if live { String::new() } else { t.album_artist.clone() },
+        duration: t.duration_ms.unwrap_or(0) / 1000,
+        at,
+    })
+}
+
 /// Sidebar entry that asks for a radio search.
 pub const RADIO_FIND: &str = "radio:find";
 /// Sidebar entry that asks for a stream address.
@@ -1547,6 +1610,8 @@ pub fn run(cfg: Config) -> Result<()> {
         engine,
         lib: lib.clone(),
         edited: Vec::new(),
+        scrobbler: crate::lastfm::Scrobbler::start(),
+        on_air: None,
         sources,
         worker,
         art,

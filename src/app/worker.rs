@@ -68,6 +68,7 @@ pub enum Job {
         then: Then,
     },
     RecordPlay(TrackRef),
+    LastfmLogin,
     /// A stream address typed by the user.
     AddStream(String),
     WriteTags {
@@ -133,6 +134,8 @@ pub enum Job {
 pub enum Msg {
     /// A station became (true) or stopped being a favorite.
     RadioFav(bool),
+    /// Last.fm login finished: user name, or why not.
+    LastfmLogin(Result<String, String>),
     /// Own stream checked and saved (its name), or why not.
     StreamAdded(Result<String, String>),
     MbResults(Result<Vec<crate::library::musicbrainz::Release>, String>),
@@ -399,6 +402,13 @@ fn run(local: &LocalSource, radio: &RadioSource, job: Job, out: &cb::Sender<Msg>
                 })
                 .collect();
             send(Msg::Restored { session, tracks });
+        }
+        Job::LastfmLogin => {
+            // Waits for the browser; must not hold up other jobs.
+            let out = out.clone();
+            std::thread::spawn(move || {
+                let _ = out.send(Msg::LastfmLogin(crate::lastfm::login().map_err(|e| format!("Last.fm: {e:#}"))));
+            });
         }
         Job::AddStream(url) => send(Msg::StreamAdded(radio.add_custom(&url).map_err(|e| format!("{e:#}")))),
         // Radio: "like" means favorite station.
