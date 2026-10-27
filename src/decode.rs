@@ -65,7 +65,8 @@ pub fn codec_name(id: symphonia::core::codecs::audio::AudioCodecId) -> &'static 
 
 impl FileStream {
     pub fn open(path: &Path) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+        let file =
+            File::open(path).with_context(|| format!("can't open {} (moved, deleted, or is the drive not plugged in?)", path.display()))?;
         let size = file.metadata().map(|m| m.len()).unwrap_or(0);
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
         let mp4 = matches!(ext.as_str(), "m4a" | "mp4" | "m4b" | "aac" | "alac");
@@ -74,7 +75,7 @@ impl FileStream {
         hint.with_extension(&ext);
         let reader = symphonia::default::get_probe()
             .probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())
-            .with_context(|| format!("unsupported file {}", path.display()))?;
+            .with_context(|| format!("{} is not a format Musinator can play", path.display()))?;
         let gapless = if mp4 { mp4_gapless(path) } else { None };
         let mut s = Self::from_reader(reader, size, gapless)?;
         if s.info.format.codec == "PCM" {
@@ -100,8 +101,13 @@ impl FileStream {
     }
 
     fn from_reader(reader: Box<dyn FormatReader>, size: u64, mp4: Option<Mp4Gapless>) -> Result<Self> {
-        let track = reader.default_track(TrackType::Audio).ok_or_else(|| anyhow!("no audio track"))?;
-        let params = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or_else(|| anyhow!("no audio codec parameters"))?.clone();
+        let track = reader.default_track(TrackType::Audio).ok_or_else(|| anyhow!("this file has no sound in it"))?;
+        let params = track
+            .codec_params
+            .as_ref()
+            .and_then(|p| p.audio())
+            .ok_or_else(|| anyhow!("this file looks damaged (its audio format can't be read)"))?
+            .clone();
         let track_id = track.id;
         let mut frames = track.num_frames;
         let delay = track.delay.unwrap_or(0) as u64;
@@ -109,7 +115,7 @@ impl FileStream {
         let tb = track.time_base.map(|t| (t.numer.get(), t.denom.get())).unwrap_or((1, rate.max(1)));
         let channels = params.channels.as_ref().map(|c| c.count()).unwrap_or(0);
         if rate == 0 || channels == 0 {
-            bail!("unknown sample rate or channel count");
+            bail!("this file looks damaged (its sample rate or channels can't be read)");
         }
         let codec = codec_name(params.codec);
 
@@ -119,7 +125,7 @@ impl FileStream {
             let ch = match channels {
                 1 => opus::Channels::Mono,
                 2 => opus::Channels::Stereo,
-                n => bail!("Opus with {n} channels is not supported"),
+                n => bail!("Opus files with {n} channels can't be played yet (1 or 2 work)"),
             };
             // OpusHead output gain: bytes 16..18, Q7.8 dB.
             let gain_q78 = params.extra_data.as_ref().filter(|d| d.len() >= 18).map(|d| i16::from_le_bytes([d[16], d[17]])).unwrap_or(0);
@@ -135,7 +141,7 @@ impl FileStream {
             Dec::Sym(
                 symphonia::default::get_codecs()
                     .make_audio_decoder(&params, &AudioDecoderOptions::default().gapless(true))
-                    .with_context(|| format!("no decoder for {codec}"))?,
+                    .with_context(|| format!("Musinator can't play {codec} audio"))?,
             )
         };
         let (priming, remaining) = match mp4 {

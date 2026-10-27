@@ -46,8 +46,8 @@ impl PwOutput {
         })?;
         match ready_rx.recv() {
             Ok(Ok(())) => Ok(Self { tx, thread: Some(thread) }),
-            Ok(Err(e)) => Err(anyhow!("PipeWire: {e}")),
-            Err(_) => Err(anyhow!("PipeWire output thread died")),
+            Ok(Err(e)) => Err(anyhow!("the sound system (PipeWire) can't be used: {e}. Is PipeWire running?")),
+            Err(_) => Err(anyhow!("sound output stopped unexpectedly: press play to try again")),
         }
     }
 }
@@ -213,8 +213,12 @@ fn positions(channels: u16) -> [u32; spa::param::audio::MAX_CHANNELS] {
 impl Output for PwOutput {
     fn configure(&self, fmt: OutputFormat) -> Result<()> {
         let (tx, rx) = cb::bounded(1);
-        self.tx.send(Cmd::Configure(fmt, tx)).map_err(|_| anyhow!("PipeWire output stopped"))?;
-        rx.recv().map_err(|_| anyhow!("PipeWire output stopped"))?.map_err(|e| anyhow!(e))
+        self.tx
+            .send(Cmd::Configure(fmt, tx))
+            .map_err(|_| anyhow!("sound output stopped (the sound system restarted?): press play to continue"))?;
+        rx.recv()
+            .map_err(|_| anyhow!("sound output stopped (the sound system restarted?): press play to continue"))?
+            .map_err(|e| anyhow!(e))
     }
     fn set_active(&self, on: bool) {
         let _ = self.tx.send(Cmd::Active(on));

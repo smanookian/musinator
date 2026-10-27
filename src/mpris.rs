@@ -110,8 +110,8 @@ impl Mpris {
         })?;
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(())) => Ok(Self { commands, tx, art }),
-            Ok(Err(e)) => Err(anyhow::anyhow!("MPRIS: {e}")),
-            Err(_) => Err(anyhow::anyhow!("MPRIS: D-Bus did not answer")),
+            Ok(Err(e)) => Err(anyhow::anyhow!("media keys can't be turned on (MPRIS): {e}")),
+            Err(_) => Err(anyhow::anyhow!("media keys can't be turned on: the desktop message bus (D-Bus) did not answer")),
         }
     }
 

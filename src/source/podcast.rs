@@ -125,7 +125,7 @@ pub fn parse_feed(xml: &str) -> Result<Feed> {
         });
     }
     if feed.title.is_empty() {
-        bail!("this feed has no title");
+        bail!("this feed is incomplete (it has no show title)");
     }
     Ok(feed)
 }
@@ -133,7 +133,7 @@ pub fn parse_feed(xml: &str) -> Result<Feed> {
 fn fetch_feed(url: &str) -> Result<Feed> {
     let mut resp = agent(20).get(url).header("User-Agent", UA).call().map_err(|e| super::net_error(e, "the feed"))?;
     if !resp.status().is_success() {
-        bail!("the feed answered {}", resp.status());
+        return Err(super::http_error("the feed", resp.status()));
     }
     parse_feed(&resp.body_mut().with_config().limit(30 << 20).read_to_string()?)
 }
@@ -174,7 +174,7 @@ impl HttpFile {
         }
         let resp = req.call().map_err(|e| super::net_error(e, "the episode"))?;
         if !resp.status().is_success() {
-            bail!("the episode answered {}", resp.status());
+            return Err(super::http_error("the episode", resp.status()));
         }
         if from > 0 && resp.status() != 206 {
             bail!("no range");
@@ -358,7 +358,7 @@ impl PodcastSource {
             .lock()
             .query_row("SELECT title, url, file FROM episodes WHERE id=?1", [id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .optional()?
-            .context("unknown episode")?;
+            .context("this episode is not in the show's feed any more")?;
         if let Some(f) = file {
             let _ = std::fs::remove_file(&f);
             self.db.lock().execute("UPDATE episodes SET file=NULL, auto=0 WHERE id=?1", [id])?;
@@ -382,7 +382,7 @@ impl PodcastSource {
             .call()
             .map_err(|e| super::net_error(e, "the episode"))?;
         if !resp.status().is_success() {
-            bail!("the episode answered {}", resp.status());
+            return Err(super::http_error("the episode", resp.status()));
         }
         let mut out = std::fs::File::create(&tmp)?;
         let res = std::io::copy(&mut resp.into_body().into_reader(), &mut out);
@@ -632,7 +632,7 @@ impl Source for PodcastSource {
             .db
             .lock()
             .query_row("SELECT url, file FROM episodes WHERE id=?1", [&r.id], |r| Ok((r.get(0)?, r.get(1)?)))
-            .context("unknown episode")?;
+            .context("this episode is not in the show's feed any more")?;
         if let Some(f) = file.filter(|f| Path::new(f).exists()) {
             return Ok(Box::new(FileStream::open(Path::new(&f))?));
         }

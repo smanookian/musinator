@@ -70,7 +70,7 @@ fn get(url: &str, query: &[(&str, String)]) -> Result<Value> {
         match resp.status().as_u16() {
             200 => return Ok(serde_json::from_str(&resp.body_mut().read_to_string()?)?),
             503 | 429 | 502 => continue,
-            s => bail!("MusicBrainz answered {s}"),
+            s => return Err(crate::source::http_error("MusicBrainz", s)),
         }
     }
     bail!("MusicBrainz is busy, try again in a moment")
@@ -174,7 +174,7 @@ pub fn cover(id: &str) -> Result<Option<Vec<u8>>> {
     match resp.status().as_u16() {
         200 => Ok(Some(resp.body_mut().with_config().limit(20 << 20).read_to_vec()?)),
         404 => Ok(None),
-        s => bail!("Cover Art Archive answered {s}"),
+        s => Err(crate::source::http_error("the Cover Art Archive", s)),
     }
 }
 

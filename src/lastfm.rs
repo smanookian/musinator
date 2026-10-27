@@ -97,23 +97,32 @@ fn call(method: &str, mut p: BTreeMap<String, String>, post: bool) -> Result<Val
         ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(15))).http_status_as_error(false).build().into();
     let mut resp = if post {
         let form: Vec<(&str, &str)> = p.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
-        agent.post(API).header("User-Agent", UA).send_form(form)?
+        agent.post(API).header("User-Agent", UA).send_form(form).map_err(|e| crate::source::net_error(e, "Last.fm"))?
     } else {
         let mut r = agent.get(API).header("User-Agent", UA);
         for (k, v) in &p {
             r = r.query(k, v);
         }
-        r.call()?
+        r.call().map_err(|e| crate::source::net_error(e, "Last.fm"))?
     };
     let v: Value = serde_json::from_str(&resp.body_mut().read_to_string()?)?;
     if let Some(code) = v["error"].as_u64() {
-        bail!("error {code}: {}", v["message"].as_str().unwrap_or("Last.fm error"));
+        let what = match code {
+            4 | 9 | 14 | 15 => "the Last.fm login is not valid any more: log in again in Settings → Desktop".to_string(),
+            11 | 16 => "Last.fm is busy right now: it will be tried again".to_string(),
+            29 => "too many requests to Last.fm: it will be tried again later".to_string(),
+            6 => format!("Last.fm doesn't know this: {}", v["message"].as_str().unwrap_or("")),
+            _ => format!("Last.fm says: {}", v["message"].as_str().unwrap_or("unknown problem")),
+        };
+        bail!("{what} (Last.fm error {code})");
     }
     Ok(v)
 }
 
 fn code_of(e: &anyhow::Error) -> Option<u64> {
-    e.to_string().strip_prefix("error ")?.split(':').next()?.parse().ok()
+    let s = e.to_string();
+    let rest = &s[s.rfind("(Last.fm error ")? + "(Last.fm error ".len()..];
+    rest.trim_end_matches(')').parse().ok()
 }
 
 /// Log in: opens the browser, waits up to 3 minutes for "Allow".
@@ -121,7 +130,7 @@ fn code_of(e: &anyhow::Error) -> Option<u64> {
 pub fn login() -> Result<String> {
     let token = call("auth.getToken", BTreeMap::new(), false)?["token"].as_str().unwrap_or("").to_string();
     if token.is_empty() {
-        bail!("Last.fm gave no login token");
+        bail!("Last.fm didn't start the login: try again in a moment");
     }
     let url = format!("https://www.last.fm/api/auth/?api_key={KEY}&token={token}");
     if std::process::Command::new("xdg-open")
@@ -143,7 +152,7 @@ pub fn login() -> Result<String> {
                 s.user = v["session"]["name"].as_str().unwrap_or("").into();
                 s.session = v["session"]["key"].as_str().unwrap_or("").into();
                 if s.session.is_empty() {
-                    bail!("Last.fm gave no session");
+                    bail!("Last.fm didn't finish the login: try again");
                 }
                 let name = s.user.clone();
                 save(&s);
@@ -398,6 +407,13 @@ mod tests {
         p.insert("format".to_string(), "json".to_string());
         let want = format!("{:x}", md5::compute(format!("api_keykmethodauth.getSessiontokent{SECRET}")));
         assert_eq!(sign(&p), want);
+    }
+
+    #[test]
+    fn error_codes_survive_plain_messages() {
+        let e = anyhow::anyhow!("the Last.fm login is not valid any more: log in again (Last.fm error 9)");
+        assert_eq!(code_of(&e), Some(9));
+        assert_eq!(code_of(&anyhow::anyhow!("no code here")), None);
     }
 
     #[test]

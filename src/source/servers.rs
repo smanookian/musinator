@@ -152,7 +152,7 @@ impl Servers {
             let l = subsonic::Login::new(url, user, password);
             let version = subsonic::ping(&l).map_err(|e| {
                 let s = e.to_string();
-                if s.contains("not a Subsonic") || s.contains("answered 404") {
+                if s.contains("not a Subsonic") || s.contains("not found at this address") {
                     anyhow::anyhow!("no Navidrome, Subsonic or Jellyfin server found at this address")
                 } else {
                     e
@@ -173,6 +173,21 @@ impl Servers {
         drop(list);
         self.save()?;
         Ok(format!("{name} · {version}"))
+    }
+
+    /// Give a server another name.
+    pub fn rename(&self, id: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() {
+            bail!("the name can't be empty");
+        }
+        let mut list = self.list.write();
+        let Some(i) = list.iter().position(|s| s.id == id) else { bail!("this server is not in the list any more") };
+        let mut saved = list[i].saved.clone();
+        saved.name = name.to_string();
+        list[i] = Arc::new(Server::from_saved(saved).expect("login"));
+        drop(list);
+        self.save()
     }
 
     /// Remove a server; returns its name.

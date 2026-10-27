@@ -28,7 +28,7 @@ pub fn socket_path() -> PathBuf {
 pub fn serve() -> Result<cb::Receiver<Request>> {
     let p = socket_path();
     if UnixStream::connect(&p).is_ok() {
-        bail!("Musinator is already running");
+        bail!("Musinator is already running in another window: close it first, or use that one");
     }
     let _ = std::fs::remove_file(&p);
     let listener = UnixListener::bind(&p)?;

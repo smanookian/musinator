@@ -104,6 +104,19 @@ impl Lyrics {
     }
 }
 
+/// An HTTP error code in plain words. `what` is e.g. "the feed", "MusicBrainz".
+pub fn http_error(what: &str, status: impl std::fmt::Display) -> anyhow::Error {
+    let code: u16 = status.to_string().split_whitespace().next().and_then(|c| c.parse().ok()).unwrap_or(0);
+    let msg = match code {
+        401 | 403 => format!("{what} refused access: check the login or permissions"),
+        404 | 410 => format!("{what} was not found at this address: it may have moved or been deleted"),
+        408 | 429 | 503 => format!("{what} is busy right now: try again in a moment"),
+        500..=599 => format!("{what} has a problem right now (error {code}): try again later"),
+        _ => format!("{what} answered with error {code}"),
+    };
+    anyhow::anyhow!(msg)
+}
+
 /// A network failure in plain words: what happened and what to do.
 /// `what` is e.g. "the server", "the station".
 pub fn net_error(e: ureq::Error, what: &str) -> anyhow::Error {

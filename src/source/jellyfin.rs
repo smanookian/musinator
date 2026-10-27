@@ -77,14 +77,14 @@ pub fn login(url: &str, user: &str, password: &str) -> Result<Login> {
     match r.status().as_u16() {
         200 => {}
         401 => bail!("wrong user name or password"),
-        s => bail!("the server answered {s}"),
+        s => return Err(super::http_error("the server", s)),
     }
     let v: Value = serde_json::from_str(&r.body_mut().read_to_string()?)?;
     Ok(Login {
         url,
         user: v["User"]["Name"].as_str().unwrap_or(user).into(),
-        user_id: v["User"]["Id"].as_str().context("no user in the answer")?.into(),
-        token: v["AccessToken"].as_str().context("no token in the answer")?.into(),
+        user_id: v["User"]["Id"].as_str().context("the server's answer was incomplete: is it really Jellyfin?")?.into(),
+        token: v["AccessToken"].as_str().context("the server's answer was incomplete: is it really Jellyfin?")?.into(),
         device_id,
     })
 }
@@ -122,7 +122,7 @@ impl JellyfinSource {
         match r.status().as_u16() {
             200 => Ok(serde_json::from_str(&r.body_mut().read_to_string()?)?),
             401 => bail!("the login is no longer valid; set up the music server again in Settings"),
-            s => bail!("the server answered {s}"),
+            s => Err(super::http_error("the server", s)),
         }
     }
 

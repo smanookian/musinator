@@ -400,7 +400,7 @@ impl App {
     }
 
     pub fn error(&mut self, msg: impl Into<String>) {
-        self.status = Some((msg.into(), true, Instant::now()));
+        self.status = Some((plain(&msg.into()), true, Instant::now()));
         self.dirty = true;
     }
 
@@ -1854,6 +1854,16 @@ fn item_key(i: &Item) -> String {
     }
 }
 
+/// Drop system codes like " (os error 2)" that mean nothing to people.
+fn plain(msg: &str) -> String {
+    let mut s = msg.to_string();
+    while let Some(i) = s.find(" (os error ") {
+        let end = s[i..].find(')').map_or(s.len(), |e| i + e + 1);
+        s.replace_range(i..end, "");
+    }
+    s
+}
+
 fn is_podcast(t: &Track) -> bool {
     t.r.as_ref().is_some_and(|r| &*r.source == crate::source::podcast::ID)
 }
@@ -2139,6 +2149,15 @@ fn watch_omarchy(tx: cb::Sender<()>) -> Option<notify::RecommendedWatcher> {
         let _ = w.watch(&p, RecursiveMode::NonRecursive);
     }
     Some(w)
+}
+
+#[cfg(test)]
+mod plain_tests {
+    #[test]
+    fn drops_os_error_codes() {
+        assert_eq!(super::plain("can't open x: No such file or directory (os error 2)"), "can't open x: No such file or directory");
+        assert_eq!(super::plain("fine"), "fine");
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

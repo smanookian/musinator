@@ -134,7 +134,7 @@ fn api(path: &str, query: &[(&str, String)]) -> Result<Value> {
         }
         let body = req.call().map_err(|e| super::net_error(e, "radio-browser.info")).and_then(|mut r| {
             if !r.status().is_success() {
-                bail!("radio-browser.info answered {}", r.status());
+                return Err(super::http_error("radio-browser.info", r.status()));
             }
             Ok(r.body_mut().read_to_string()?)
         });
@@ -252,7 +252,7 @@ impl RadioSource {
             .call()
             .map_err(|e| super::net_error(e, "the address"))?;
         if !resp.status().is_success() {
-            bail!("the address answered {}", resp.status());
+            return Err(super::http_error("the address", resp.status()));
         }
         let header = |k: &str| resp.headers().get(k).and_then(|v| v.to_str().ok()).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
         let ctype = header("content-type").unwrap_or_default().to_ascii_lowercase();
@@ -354,7 +354,7 @@ impl Source for RadioSource {
     }
 
     fn open(&self, r: &TrackRef) -> Result<Box<dyn Stream>> {
-        let st = self.station(&r.id).context("unknown station")?;
+        let st = self.station(&r.id).context("this station is not known any more: find it again in Radio")?;
         let url = if st.uuid.starts_with(CUSTOM) {
             resolve_playlist(&st.url)?
         } else {
@@ -501,7 +501,7 @@ impl RadioStream {
         let resp =
             agent.get(url).header("User-Agent", UA).header("Icy-MetaData", "1").call().map_err(|e| super::net_error(e, "the station"))?;
         if !resp.status().is_success() {
-            bail!("the station answered {}", resp.status());
+            return Err(super::http_error("the station", resp.status()));
         }
         let metaint = resp.headers().get("icy-metaint").and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
         let ctype = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_ascii_lowercase();

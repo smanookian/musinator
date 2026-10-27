@@ -70,7 +70,7 @@ fn get(l: &Login, method: &str, extra: &[(&str, &str)]) -> Result<Value> {
         ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(20))).http_status_as_error(false).build().into();
     let mut resp = agent.get(&l.endpoint(method, extra)).call().map_err(|e| super::net_error(e, "the server"))?;
     if !resp.status().is_success() {
-        bail!("the server answered {}", resp.status());
+        return Err(super::http_error("the server", resp.status()));
     }
     let v: Value = serde_json::from_str(&resp.body_mut().read_to_string()?).context("this is not a Subsonic / Navidrome server")?;
     let r = v["subsonic-response"].clone();
@@ -79,7 +79,7 @@ fn get(l: &Login, method: &str, extra: &[(&str, &str)]) -> Result<Value> {
         if r["error"]["code"].as_u64() == Some(40) {
             bail!("wrong user name or password");
         }
-        bail!("server: {msg}");
+        bail!("the server says: {msg}");
     }
     Ok(r)
 }

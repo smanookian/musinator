@@ -41,8 +41,8 @@ pub fn sync(on: bool) {
 
 pub fn set(on: bool) -> Result<()> {
     let p = shell_json();
-    let text = std::fs::read_to_string(&p).context("read shell.json")?;
-    let mut v: Value = serde_json::from_str(&text).context("parse shell.json")?;
+    let text = std::fs::read_to_string(&p).context("can't read the Omarchy bar settings (~/.config/omarchy/shell.json)")?;
+    let mut v: Value = serde_json::from_str(&text).context("the Omarchy bar settings file is not valid; fix it or restore its backup")?;
     if has_module(&v) == on {
         return Ok(());
     }

@@ -42,7 +42,10 @@ pub enum Confirm {
 
 pub enum InputFor {
     NewPlaylist,
-    NewPlaylistWith { nodes: Vec<String>, tracks: Vec<Arc<Track>> },
+    NewPlaylistWith {
+        nodes: Vec<String>,
+        tracks: Vec<Arc<Track>>,
+    },
     RenamePlaylist(i64),
     Export(i64),
     AddFolder,
@@ -50,6 +53,8 @@ pub enum InputFor {
     RadioUrl,
     Podcast,
     ServerName,
+    /// Rename the server with this id.
+    RenameServer(String),
     ServerUrl(String),
     ServerUser(String, String),
     ServerPass(String, String, String),
@@ -631,6 +636,17 @@ impl Dialog {
                         ));
                         return false;
                     }
+                    KeyCode::Char('r') => {
+                        if let Some(srv) = list.get(*cursor) {
+                            app.dialog = Some(Dialog::input(
+                                "Rename music server",
+                                "Name",
+                                srv.name.clone(),
+                                InputFor::RenameServer(srv.id.clone()),
+                            ));
+                            return false;
+                        }
+                    }
                     KeyCode::Char('d') | KeyCode::Delete => {
                         if let Some(srv) = list.get(*cursor)
                             && let Some(name) = app.servers.remove(&srv.id)
@@ -686,6 +702,17 @@ impl Dialog {
                         InputFor::RenamePlaylist(id) => app.send_job(Job::RenamePlaylist { id, name: v }),
                         InputFor::Export(id) => app.send_job(Job::Export { id, path: crate::config::expand(&v) }),
                         InputFor::Import => app.send_job(Job::Import { path: crate::config::expand(&v) }),
+                        InputFor::RenameServer(id) => {
+                            match app.servers.rename(&id, &v) {
+                                Ok(()) => {
+                                    app.info(format!("Renamed to {v}"));
+                                    app.rebuild_side();
+                                }
+                                Err(e) => app.error(format!("Can't rename: {e:#}")),
+                            }
+                            let cursor = app.servers.all().iter().position(|s| s.id == id).unwrap_or(0);
+                            app.dialog = Some(Dialog::Servers { cursor });
+                        }
                         InputFor::ServerName => {
                             app.dialog = Some(Dialog::input(
                                 "Add music server",
@@ -718,7 +745,7 @@ impl Dialog {
                         InputFor::AddFolder => {
                             let p = crate::config::expand(&v);
                             if !p.is_dir() {
-                                app.error(format!("Not a folder: {}", p.display()));
+                                app.error(format!("{} is not a folder: check the path", p.display()));
                                 return true;
                             }
                             app.cfg.music_folders.push(v);
@@ -1314,7 +1341,7 @@ impl Dialog {
                         Style::default().fg(c(t.muted)).bg(c(bg)),
                     );
                 }
-                hints_row(f.buffer_mut(), inner, "a add · d remove · esc done", muted);
+                hints_row(f.buffer_mut(), inner, "a add · r rename · d remove · esc done", muted);
             }
             Dialog::Folders { cursor, .. } => {
                 let h = (app.cfg.music_folders.len() as u16 + 5).clamp(7, 20);

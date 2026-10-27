@@ -533,7 +533,7 @@ impl Worker {
     fn open(&mut self, item_id: u64) -> Result<Decoding> {
         let (track, album) = {
             let q = self.queue.lock();
-            let it = q.get(item_id).ok_or_else(|| anyhow::anyhow!("item gone"))?;
+            let it = q.get(item_id).ok_or_else(|| anyhow::anyhow!("this song was removed from the queue"))?;
             (it.track.clone(), q.album_context(item_id))
         };
         let stream = self.sources.open(track.tref())?;

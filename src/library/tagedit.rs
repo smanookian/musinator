@@ -56,8 +56,8 @@ pub fn save_folder_cover(dir: &Path, b: &[u8]) -> Result<std::path::PathBuf> {
     let ext = cover_ext(b);
     let path = dir.join(format!("cover.{ext}"));
     let tmp = dir.join(format!(".musinator-tmp-cover.{ext}"));
-    std::fs::write(&tmp, b).context("write cover")?;
-    std::fs::rename(&tmp, &path).context("replace cover")?;
+    std::fs::write(&tmp, b).context("can't save cover.jpg in the album folder (is the drive full or read-only?)")?;
+    std::fs::rename(&tmp, &path).context("can't replace cover.jpg in the album folder (is the drive read-only?)")?;
     let other = dir.join(if ext == "png" { "cover.jpg" } else { "cover.png" });
     let _ = std::fs::remove_file(other);
     Ok(path)
@@ -176,7 +176,7 @@ pub fn from_filename(path: &Path) -> Fields {
 /// replaces the original, so a crash can never leave a half-written song.
 pub fn write(path: &Path, fields: &[Option<String>; 8], cover: &CoverEdit) -> Result<()> {
     let tmp = path.with_file_name(format!(".musinator-tmp-{}", path.file_name().unwrap_or_default().to_string_lossy()));
-    std::fs::copy(path, &tmp).context("copy")?;
+    std::fs::copy(path, &tmp).context("can't make a working copy of the song (is the drive full or read-only?)")?;
     let res = (|| -> Result<()> {
         let mut f = lofty::read_from_path(&tmp)?;
         let tag_type = f.primary_tag_type();
@@ -236,7 +236,7 @@ pub fn write(path: &Path, fields: &[Option<String>; 8], cover: &CoverEdit) -> Re
     })();
     match res {
         Ok(()) => {
-            std::fs::rename(&tmp, path).context("replace")?;
+            std::fs::rename(&tmp, path).context("can't replace the song file (is the drive read-only?)")?;
             Ok(())
         }
         Err(e) => {

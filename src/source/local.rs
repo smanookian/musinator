@@ -195,9 +195,9 @@ impl Source for LocalSource {
                     [],
                 )?,
                 "week" => self.tracks(&c, "WHERE t.added_at >= ?1 ORDER BY t.added_at DESC, lower(t.album), t.disc_no, t.track_no", [week])?,
-                _ => bail!("unknown list {arg}"),
+                _ => bail!("this list doesn't exist any more"),
             },
-            _ => bail!("unknown node {node}"),
+            _ => bail!("this list doesn't exist any more"),
         };
         Ok(page(v, p))
     }
