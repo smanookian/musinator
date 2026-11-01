@@ -31,7 +31,12 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)
+# Build from source only when run as a file from a checkout (./install.sh),
+# not when piped into sh (then $0 is "sh" and the current folder is unrelated).
+HERE=""
+case "$0" in
+  *install.sh) HERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd || true) ;;
+esac
 if [ -n "$HERE" ] && [ -f "$HERE/Cargo.toml" ] && grep -q '^name = "musinator"' "$HERE/Cargo.toml"; then
   say "Building from source in $HERE"
   command -v cargo >/dev/null || fail "cargo is needed to build from source"
@@ -41,7 +46,11 @@ if [ -n "$HERE" ] && [ -f "$HERE/Cargo.toml" ] && grep -q '^name = "musinator"' 
 else
   URL="https://github.com/$REPO/releases/latest/download/musinator-$ARCH-linux.tar.gz"
   say "Downloading $URL"
-  curl -fsSL "$URL" -o "$TMP/m.tar.gz" || fail "download failed"
+  if ! curl -fsSL "$URL" -o "$TMP/m.tar.gz" 2>/dev/null; then
+    # Private repository: download with the GitHub CLI, which is signed in.
+    command -v gh >/dev/null || fail "download failed (private repository? install gh and run: gh auth login)"
+    gh release download -R "$REPO" -p "musinator-$ARCH-linux.tar.gz" -O "$TMP/m.tar.gz" || fail "download failed (no release yet?)"
+  fi
   tar -xzf "$TMP/m.tar.gz" -C "$TMP"
   DESKTOP="$TMP/musinator.desktop"
 fi
