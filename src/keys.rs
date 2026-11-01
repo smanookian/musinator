@@ -319,6 +319,16 @@ impl Keymap {
     pub fn conflict(&self, c: &Chord, not: Action) -> Option<Action> {
         ACTIONS.iter().map(|i| i.action).find(|a| *a != not && self.keys(*a).contains(c))
     }
+
+    /// The config list for `a` with key `c`: `add` keeps its other keys, else `c` replaces them.
+    pub fn keys_with(&self, a: Action, c: Chord, add: bool) -> Vec<String> {
+        let mut v: Vec<String> = if add { self.keys(a).iter().map(chord_id).collect() } else { Vec::new() };
+        let id = chord_id(&c);
+        if !v.contains(&id) {
+            v.push(id);
+        }
+        v
+    }
 }
 
 #[cfg(test)]
@@ -349,6 +359,27 @@ mod tests {
                 assert_eq!(Chord::parse(&chord_id(&c)), Some(c), "{key}");
             }
         }
+    }
+
+    #[test]
+    fn add_key_keeps_the_others() {
+        let mut o = HashMap::new();
+        let k = Keymap::new(&o);
+        let f9 = Chord::parse("f9").unwrap();
+        assert_eq!(k.conflict(&f9, Action::Down), None);
+        o.insert("down".to_string(), k.keys_with(Action::Down, f9, true));
+        let k = Keymap::new(&o);
+        // j and ↓ still work, and f9 too.
+        assert_eq!(k.action(&ev(KeyCode::Char('j'), KeyModifiers::NONE)), Some(Action::Down));
+        assert_eq!(k.action(&ev(KeyCode::Down, KeyModifiers::NONE)), Some(Action::Down));
+        assert_eq!(k.action(&ev(KeyCode::F(9), KeyModifiers::NONE)), Some(Action::Down));
+        // Adding a key it already has keeps one copy.
+        assert_eq!(k.keys_with(Action::Down, f9, true).len(), k.keys(Action::Down).len());
+        // Replace leaves only the new key.
+        o.insert("down".to_string(), k.keys_with(Action::Down, f9, false));
+        let k = Keymap::new(&o);
+        assert_eq!(k.keys(Action::Down), &[f9]);
+        assert_eq!(k.action(&ev(KeyCode::Char('j'), KeyModifiers::NONE)), None);
     }
 
     #[test]

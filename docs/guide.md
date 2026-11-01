@@ -546,7 +546,7 @@ Changes apply at once and are saved.
 
 | Setting | What it does |
 |---------|--------------|
-| Remap keys | Change the key for any action. See [Keys](#keys). |
+| Remap keys | Change or add keys for any action. See [Change a key](#change-a-key). |
 
 ## Keys
 
@@ -650,16 +650,16 @@ Quit asks first. Press `y` or `enter` to quit. Turn the question off with
 
 ### Change a key
 
-1. `S`, then **Keys → Remap keys**.
-2. Select the action and press `enter`.
+1. `S`, then **Keys → Remap keys**. Each action shows all its keys.
+2. Select the action. Press `enter` to replace its keys with one new key, or
+   `a` to add another key and keep the ones it has.
 3. Press the new key. `esc` cancels.
 
 If the key is already used, Musinator tells you which action has it. Change
-that one first. `r` resets the selected action to its default.
+that one first. `r` resets the selected action to its default keys.
 
-A remapped action gets exactly one key. To give an action more than one key,
-add it to the `[keys]` table in `~/.config/musinator/config.toml`, using the
-names from the table below:
+You can also set keys in the `[keys]` table in
+`~/.config/musinator/config.toml`, using the names from the table below:
 
 ```toml
 [keys]

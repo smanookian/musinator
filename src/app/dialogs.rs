@@ -17,7 +17,7 @@ use super::worker::{CoverJob, Job, Then};
 use super::{App, Focus, Screen, Side};
 use crate::config::{Kind, SECTIONS, SETTINGS};
 use crate::engine::Cmd;
-use crate::keys::{ACTIONS, Chord, Keymap, chord_id};
+use crate::keys::{ACTIONS, Chord, Keymap};
 use crate::library::db::Playlist;
 use crate::library::musicbrainz::Release;
 use crate::library::tagedit::{self, Fields};
@@ -90,6 +90,8 @@ pub enum Dialog {
         cursor: usize,
         offset: usize,
         capture: bool,
+        /// The captured key goes next to the action's keys instead of replacing them.
+        add: bool,
         msg: Option<String>,
     },
     Folders {
@@ -583,7 +585,7 @@ impl Dialog {
                 }
                 true
             }
-            Dialog::Keys { cursor, capture, msg, .. } => {
+            Dialog::Keys { cursor, capture, add, msg, .. } => {
                 let info = &ACTIONS[*cursor];
                 if *capture {
                     if esc {
@@ -595,10 +597,15 @@ impl Dialog {
                     if let Some(other) = app.keys.conflict(&ch, info.action) {
                         *msg = Some(format!("{} is used by \"{}\". Change that first.", ch, crate::keys::info(other).label));
                     } else {
-                        app.cfg.keys.insert(info.id.to_string(), vec![chord_id(&ch)]);
+                        let keys = app.keys.keys_with(info.action, ch, *add);
+                        app.cfg.keys.insert(info.id.to_string(), keys);
                         app.keys = Keymap::new(&app.cfg.keys);
                         app.save_cfg();
-                        *msg = Some(format!("\"{}\" is now {}", info.label, ch));
+                        *msg = Some(if *add {
+                            format!("\"{}\" now also uses {}", info.label, ch)
+                        } else {
+                            format!("\"{}\" is now {}", info.label, ch)
+                        });
                     }
                     *capture = false;
                     return true;
@@ -607,9 +614,11 @@ impl Dialog {
                     _ if esc => return false,
                     KeyCode::Down | KeyCode::Char('j') => *cursor = (*cursor + 1).min(ACTIONS.len() - 1),
                     KeyCode::Up | KeyCode::Char('k') => *cursor = cursor.saturating_sub(1),
-                    KeyCode::Enter => {
+                    KeyCode::Enter | KeyCode::Char('a') => {
                         *capture = true;
-                        *msg = Some(format!("Press a new key for \"{}\" · esc cancels", info.label));
+                        *add = k.code == KeyCode::Char('a');
+                        let what = if *add { "another" } else { "a new" };
+                        *msg = Some(format!("Press {what} key for \"{}\" · esc cancels", info.label));
                     }
                     KeyCode::Char('r') => {
                         app.cfg.keys.remove(info.id);
@@ -1315,7 +1324,7 @@ impl Dialog {
                         Style::default().fg(c(if custom { t.warn } else { t.accent })).bg(c(bg)),
                     );
                 }
-                let line = msg.clone().unwrap_or_else(|| "enter set key · r reset · esc close".into());
+                let line = msg.clone().unwrap_or_else(|| "enter set key · a add key · r reset · esc close".into());
                 hints_row(f.buffer_mut(), inner, &line, muted);
             }
             Dialog::Servers { cursor } => {
@@ -1603,7 +1612,7 @@ fn apply(app: &mut App, key: &str) {
 fn open_setting(app: &mut App, key: &str) -> bool {
     match key {
         "theme" => app.dialog = Some(Dialog::themes(app)),
-        "keys" => app.dialog = Some(Dialog::Keys { cursor: 0, offset: 0, capture: false, msg: None }),
+        "keys" => app.dialog = Some(Dialog::Keys { cursor: 0, offset: 0, capture: false, add: false, msg: None }),
         "music_folders" => app.dialog = Some(Dialog::Folders { cursor: 0, changed: false }),
         "import_playlist" => app.dialog = Some(Dialog::input("Import playlist", "File", "~/".into(), InputFor::Import)),
         "servers" => app.dialog = Some(Dialog::Servers { cursor: 0 }),
