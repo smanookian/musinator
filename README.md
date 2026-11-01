@@ -5,6 +5,8 @@ A modern-looking music player for the terminal. Linux and Omarchy first.
 ![Library, Catppuccin Mocha](docs/screenshots/library-catppuccin.png)
 ![Now Playing, Catppuccin Mocha](docs/screenshots/now-playing-catppuccin.png)
 
+New here? Read the [guide](docs/guide.md).
+
 ## What it does
 
 - Plays your local music: FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Opus, WAV.
@@ -55,7 +57,7 @@ Then run `musinator`. It scans `~/Music` in the background. Add other folders in
 
 ## Keys
 
-All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
+All keys can be changed in **Settings → Keys**. Press `?` for searchable help. The [guide](docs/guide.md#keys) has the full list.
 
 **Mouse:** click the player buttons (⏮ ⏸ ⏭, shuffle, repeat), the progress bar, any key hint (for example `a queue` or `/ search`) and rows in lists and windows. Click a selected row again to open it; the wheel scrolls.
 
