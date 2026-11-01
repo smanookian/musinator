@@ -36,7 +36,9 @@ pub struct TrackRow {
     pub embedded_lyrics: bool,
 }
 
-pub const AUDIO_EXT: &[&str] = &["flac", "mp3", "m4a", "mp4", "m4b", "aac", "ogg", "oga", "opus", "wav", "wave", "aif", "aiff"];
+/// Video files count too: Musinator plays their sound, and `V` opens them in mpv.
+pub const AUDIO_EXT: &[&str] =
+    &["flac", "mp3", "m4a", "mp4", "m4b", "m4v", "mov", "mkv", "mka", "webm", "aac", "ogg", "oga", "opus", "wav", "wave", "aif", "aiff"];
 
 pub fn is_audio(p: &Path) -> bool {
     p.extension().and_then(|e| e.to_str()).is_some_and(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
@@ -48,7 +50,11 @@ fn db(s: &str) -> Option<f32> {
 }
 
 pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
-    let f = lofty::read_from_path(path)?;
+    let f = match lofty::read_from_path(path) {
+        Ok(f) => f,
+        // lofty can't read Matroska/WebM or QuickTime (.mov): take the format from the decoder.
+        Err(e) => return from_decoder(path, mtime, size).map_err(|_| e.into()),
+    };
     let p = f.properties();
     let ft = f.file_type();
     let codec = match ft {
@@ -114,6 +120,28 @@ pub fn read(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
             t.get_string(ItemKey::Lyrics).or_else(|| t.get_string(ItemKey::UnsyncLyrics)).is_some_and(|l| !l.trim().is_empty());
     }
     Ok(r)
+}
+
+/// Format and length from the decoder, for files without tags lofty can read.
+/// The title is the file name.
+fn from_decoder(path: &Path, mtime: i64, size: i64) -> Result<TrackRow> {
+    use crate::source::Stream;
+    let s = crate::decode::FileStream::open(path)?;
+    let info = s.info();
+    Ok(TrackRow {
+        path: path.to_string_lossy().into_owned(),
+        folder: path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+        title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+        mtime,
+        size,
+        duration_ms: info.duration().map(|d| d.as_millis() as u64).unwrap_or(0),
+        sample_rate: info.format.sample_rate,
+        bits: info.format.bits,
+        channels: info.format.channels,
+        bitrate: info.format.bitrate_kbps,
+        codec: info.format.codec.clone(),
+        ..Default::default()
+    })
 }
 
 /// Embedded front cover bytes.

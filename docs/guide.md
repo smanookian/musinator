@@ -51,7 +51,10 @@ press `enter`, then:
 - `esc` closes the window and scans again.
 
 Musinator scans these files: `.flac`, `.mp3`, `.m4a`, `.mp4`, `.m4b`, `.aac`,
-`.ogg`, `.oga`, `.opus`, `.wav`, `.wave`, `.aif`, `.aiff`.
+`.ogg`, `.oga`, `.opus`, `.wav`, `.wave`, `.aif`, `.aiff`, `.mka`, and the video
+files `.m4v`, `.mov`, `.mkv`, `.webm`. Musinator plays the sound of a video if it
+is FLAC, MP3, AAC, ALAC, Vorbis, Opus or PCM. Tags are not read from `.mkv`,
+`.mka`, `.webm` and `.mov` files: the file name is the title.
 
 New files show up by themselves while **Watch for changes** is on. To scan by
 hand, press `ctrl+r`.
@@ -296,8 +299,9 @@ window is smaller than 60 columns or 12 rows.
 
 `V` opens the selected (or playing) video file in [mpv](https://mpv.io), at
 the same spot. Musinator pauses. You need mpv installed
-(`sudo pacman -S mpv`). Musinator only scans `.mp4` among video types, so this
-works for `.mp4` files in your music folders.
+(`sudo pacman -S mpv`). This works for `.mp4`, `.m4v`, `.mov`, `.mkv` and
+`.webm` files in your music folders. Musinator does not scan `.avi` files: it
+can't read that format.
 
 ## Radio
 

@@ -8,7 +8,7 @@
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -47,6 +47,8 @@ pub struct FileStream {
     head_left: u64,
     /// Playable frames left (MP4 with a known length).
     remaining: Option<u64>,
+    /// The file, so a seek that fails can start over from a fresh reader.
+    path: Option<PathBuf>,
 }
 
 pub fn codec_name(id: symphonia::core::codecs::audio::AudioCodecId) -> &'static str {
@@ -69,7 +71,7 @@ impl FileStream {
             File::open(path).with_context(|| format!("can't open {} (moved, deleted, or is the drive not plugged in?)", path.display()))?;
         let size = file.metadata().map(|m| m.len()).unwrap_or(0);
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-        let mp4 = matches!(ext.as_str(), "m4a" | "mp4" | "m4b" | "aac" | "alac");
+        let mp4 = matches!(ext.as_str(), "m4a" | "mp4" | "m4b" | "m4v" | "mov" | "aac" | "alac");
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         let mut hint = Hint::new();
         hint.with_extension(&ext);
@@ -86,6 +88,7 @@ impl FileStream {
             }
             .into();
         }
+        s.path = Some(path.to_path_buf());
         Ok(s)
     }
 
@@ -116,6 +119,15 @@ impl FileStream {
         let channels = params.channels.as_ref().map(|c| c.count()).unwrap_or(0);
         if rate == 0 || channels == 0 {
             bail!("this file looks damaged (its sample rate or channels can't be read)");
+        }
+        if frames.is_none() {
+            // Matroska/WebM only store the length of the whole file, not of the audio track.
+            let media = reader.media_info();
+            frames = media
+                .time_base
+                .zip(media.duration)
+                .and_then(|(tb, d)| tb.calc_duration(d))
+                .map(|t| (t.as_secs_f64() * rate as f64).round() as u64);
         }
         let codec = codec_name(params.codec);
 
@@ -161,7 +173,7 @@ impl FileStream {
             format: AudioFormat { codec: codec.into(), sample_rate: rate, bits, channels: channels as u16, bitrate_kbps },
             frames,
         };
-        Ok(Self { reader, dec, track_id, info, skip_until, tb, priming, head_left: priming, remaining })
+        Ok(Self { reader, dec, track_id, info, skip_until, tb, priming, head_left: priming, remaining, path: None })
     }
 
     fn ts_to_frames(&self, ts: i64) -> i64 {
@@ -266,7 +278,19 @@ impl Stream for FileStream {
             target = target.min(total);
         }
         let raw = self.frames_to_ts(target + self.priming);
-        let seeked = self.reader.seek(SeekMode::Accurate, SeekTo::Timestamp { ts: Timestamp::new(raw), track_id: self.track_id })?;
+        let (ts, track_id) = (Timestamp::new(raw), self.track_id);
+        let at = move || SeekTo::Timestamp { ts, track_id };
+        let seeked = match self.reader.seek(SeekMode::Accurate, at()) {
+            Ok(s) => s,
+            // symphonia's Matroska reader can't seek once it has read to the end: open the file again.
+            Err(e) => match self.path.take() {
+                Some(p) => {
+                    *self = Self::open(&p)?;
+                    self.reader.seek(SeekMode::Accurate, at())?
+                }
+                None => return Err(e.into()),
+            },
+        };
         match &mut self.dec {
             Dec::Sym(d) => d.reset(),
             Dec::Opus { dec, .. } => dec.reset_state()?,

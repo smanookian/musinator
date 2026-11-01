@@ -233,6 +233,32 @@ fn gapless_every_format() {
 }
 
 #[test]
+fn video_containers_play_and_seek() {
+    let dir = tempfile::tempdir().unwrap();
+    let cases: &[(&str, &[&str], &str, u32)] = &[
+        ("mkv", &["mkv", "-c:a", "libopus"], "Opus", 48_000),
+        ("webm", &["webm", "-c:a", "libvorbis"], "Vorbis", 44_100),
+        ("mov", &["mov", "-c:a", "aac"], "AAC", 44_100),
+    ];
+    for (name, codec, want_codec, rate) in cases {
+        let files = make_album(dir.path(), name, codec, *rate, &[*rate as usize * 3]);
+        // The scan finds the format and length even without tags lofty can read.
+        let row = crate::library::tags::read(&files[0], 0, 0).unwrap();
+        assert_eq!(row.codec, *want_codec, "{name}");
+        assert!(row.duration_ms.abs_diff(3000) < 100, "{name}: {} ms", row.duration_ms);
+        let mut s = FileStream::open(&files[0]).unwrap();
+        let mut buf = Vec::new();
+        while s.read(&mut buf).unwrap() {
+            buf.clear();
+        }
+        // Seeking back after reading to the end still works.
+        let pos = s.seek(Duration::from_secs(1)).unwrap();
+        assert!(pos.abs_diff(*rate as u64) < *rate as u64 / 10, "{name}: landed at {pos}");
+        assert!(s.read(&mut buf).unwrap(), "{name}");
+    }
+}
+
+#[test]
 fn seek_lands_on_target() {
     let dir = tempfile::tempdir().unwrap();
     let files = make_album(dir.path(), "seek", &["flac", "-c:a", "flac"], 44_100, &[44_100 * 6]);

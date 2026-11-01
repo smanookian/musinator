@@ -9,7 +9,7 @@ New here? Read the [guide](docs/guide.md).
 
 ## What it does
 
-- Plays your local music: FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Opus, WAV.
+- Plays your local music: FLAC, MP3, AAC/M4A, ALAC, Ogg Vorbis, Opus, WAV, and the sound of video files (`mp4`, `m4v`, `mov`, `mkv`, `webm`).
 - **Gapless.** Songs in the same format flow into each other with no gap, sample-exact (tested for every format).
 - **ReplayGain.** Uses track or album gain from tags. Files without tags are measured (EBU R128) in the background.
 - **Real format.** The audio line shows codec, bit depth and rate, e.g. `FLAC 24/96 → 48 kHz · gapless · RG −1.6 dB`. `→ 48 kHz` means PipeWire resamples. `bit-perfect` means it does not.
@@ -92,7 +92,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `1`–`5` / `0` | rate 1–5 stars / clear rating |
 | `e` | edit tags of the song, or of every song in an album / folder. `ctrl+f` fills tags from the file and folder name. **Cover:** type a picture path (JPEG/PNG kept as is, other formats become JPEG); it goes inside every song, and for an album also as `cover.jpg` in the folder. `ctrl+x` removes it. **`ctrl+b`** looks the album up on [MusicBrainz](https://musicbrainz.org): pick the release, and it fills titles, artist, album, year, track and disc numbers, plus the front cover from the [Cover Art Archive](https://coverartarchive.org). Only artist and album names are sent, and only when you press it. Nothing is saved until you press `enter`. Musinator writes a copy first, then replaces the file. |
 | `ctrl+e` | equalizer: 10 bands with a live curve, presets (Rock, Pop, Jazz, …) or your own; `space` on/off. Boosts lower the overall level so nothing distorts. |
-| `V` | watch a video file (`mp4`, `mkv`, `webm`, …) in [mpv](https://mpv.io) from the same spot; Musinator pauses |
+| `V` | watch a video file (`mp4`, `m4v`, `mov`, `mkv`, `webm`) in [mpv](https://mpv.io) from the same spot; Musinator pauses |
 | `m` | mini mode: 3 lines for a small window (turns on by itself when the window is small) |
 | `f` | full-screen lyrics (big current line on Kitty/Ghostty) |
 | `ctrl+l` | find lyrics online (LRCLIB), only when you press it |

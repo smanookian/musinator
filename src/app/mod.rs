@@ -252,7 +252,7 @@ impl App {
 
     /// Open the selected (or playing) video file in mpv at the right spot and pause here.
     fn open_video(&mut self) {
-        const VIDEO: &[&str] = &["mp4", "m4v", "mkv", "webm", "mov", "avi"];
+        const VIDEO: &[&str] = &["mp4", "m4v", "mov", "mkv", "webm"];
         let is_video = |t: &Track| {
             t.r.as_ref().is_some_and(|r| {
                 &*r.source == crate::source::local::ID
