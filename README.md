@@ -2,6 +2,10 @@
 
 A modern-looking music player for the terminal. Linux and Omarchy first.
 
+![Musinator demo: album covers, Now Playing with synced lyrics, live theme switching, mini mode](docs/demo/musinator-demo.gif)
+
+A longer demo (43 s, with full-screen lyrics, the equalizer and search): [docs/demo/musinator-demo.mp4](docs/demo/musinator-demo.mp4)
+
 ![Library, Catppuccin Mocha](docs/screenshots/library-catppuccin.png)
 ![Now Playing, Catppuccin Mocha](docs/screenshots/now-playing-catppuccin.png)
 
@@ -85,7 +89,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `tab` | next pane |
 | `j` / `k`, `g` / `G` | move, top / bottom |
 | `<` / `>` | left pane narrower / wider |
-| `o` | album grid |
+| `o` | album grid (←/→ move between covers there) |
 | `P` / `N` | add to playlist / new playlist |
 | `R` / `E` | rename / export playlist |
 | `L` | like |

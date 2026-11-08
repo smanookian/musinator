@@ -123,7 +123,7 @@ impl Source for LocalSource {
         let week = db::now() - 7 * 86_400;
         let v = match kind {
             "artists" => {
-                let mut st = c.prepare_cached("SELECT artist, COUNT(*), SUM(tracks) FROM albums GROUP BY lower(artist) ORDER BY lower(artist)")?;
+                let mut st = c.prepare_cached("SELECT artist, COUNT(*), SUM(tracks) FROM albums GROUP BY lower(artist) ORDER BY artist = '', lower(artist)")?;
                 let v = st.query_map([], |r| {
                     let albums: i64 = r.get(1)?;
                     Ok(Item::Node(Node {
@@ -138,9 +138,9 @@ impl Source for LocalSource {
                 v.filter_map(|r| r.ok()).collect()
             }
             "artist" => self.album_nodes(&c, "WHERE lower(artist) = lower(?1) ORDER BY year, title", [arg])?,
-            "albums" => self.album_nodes(&c, "ORDER BY lower(artist), year, lower(title)", [])?,
+            "albums" => self.album_nodes(&c, "ORDER BY artist = '', lower(artist), year, lower(title)", [])?,
             "album" => self.tracks(&c, "WHERE t.album_key = ?1 ORDER BY t.disc_no, t.track_no, t.path", [arg])?,
-            "tracks" => self.tracks(&c, "ORDER BY lower(t.artist), lower(t.album), t.disc_no, t.track_no", [])?,
+            "tracks" => self.tracks(&c, "ORDER BY t.artist = '', lower(t.artist), lower(t.album), t.disc_no, t.track_no", [])?,
             "genres" => {
                 let mut st = c.prepare_cached("SELECT genre, COUNT(*) FROM tracks WHERE genre != '' GROUP BY genre ORDER BY lower(genre)")?;
                 let v = st.query_map([], |r| {

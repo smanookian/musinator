@@ -932,6 +932,18 @@ impl App {
             Action::PlaySelected => self.enter(),
             Action::Next => self.engine.send(Cmd::Next),
             Action::Prev => self.engine.send(Cmd::Prev),
+            // In the album grid, ←/→ move between covers instead of seeking.
+            Action::SeekBack | Action::SeekFwd
+                if self.screen == Screen::Library && self.focus == Focus::List && self.grid_cols().is_some() =>
+            {
+                let d: isize = if a == Action::SeekFwd { 1 } else { -1 };
+                if let Some(v) = self.list_mut()
+                    && !v.items.is_empty()
+                {
+                    v.cursor = (v.cursor as isize + d).clamp(0, v.items.len() as isize - 1) as usize;
+                }
+                self.dirty = true;
+            }
             Action::SeekBack | Action::SeekFwd | Action::SeekBackBig | Action::SeekFwdBig => {
                 if !self.can_seek() {
                     self.info("This stream can't seek");

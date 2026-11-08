@@ -1,68 +1,68 @@
-<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" xml:space="preserve" style="--fg:#cdd6f4;--muted:#7f849c;--border:#45475a;--surface:#1e1e2e;--accent:#89b4fa;--c1:#89b4fa;--c2:#cba6f7;--c3:#f5c2e7">
-<!-- A. Library. Colors = catppuccin-mocha for preview; real app uses the active theme. -->
-<rect width="960" height="520" fill="var(--surface)"/>
-<rect x="8" y="8" width="236" height="466" rx="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
-<rect x="12" y="12" width="228" height="22" rx="3" fill="var(--accent)"/>
-<text x="20" y="27" fill="var(--surface)" font-weight="bold">Library</text>
-<text x="232" y="27" fill="var(--surface)" text-anchor="end">j/k · enter</text>
-<text x="20" y="54" fill="var(--accent)">♪ Now Playing</text>
-<text x="20" y="74" fill="var(--fg)">  Queue</text><text x="232" y="74" fill="var(--muted)" text-anchor="end">12</text>
-<text x="20" y="100" fill="var(--fg)" font-weight="bold">▾ Library</text>
-<text x="36" y="120" fill="var(--fg)">Artists</text>
-<rect x="14" y="127" width="224" height="19" rx="2" fill="var(--accent)" opacity="0.2"/>
-<text x="22" y="140" fill="var(--accent)">→</text><text x="36" y="140" fill="var(--fg)" font-weight="bold">Albums</text>
-<text x="36" y="160" fill="var(--fg)">Tracks</text>
-<text x="36" y="180" fill="var(--fg)">Genres</text>
-<text x="36" y="200" fill="var(--fg)">Folders</text>
-<text x="20" y="226" fill="var(--fg)" font-weight="bold">▾ Playlists</text>
-<text x="36" y="246" fill="var(--fg)">Late night</text><text x="232" y="246" fill="var(--muted)" text-anchor="end">38</text>
-<text x="36" y="266" fill="var(--fg)">Deep focus</text><text x="232" y="266" fill="var(--muted)" text-anchor="end">112</text>
-<text x="36" y="286" fill="var(--fg)">Gym</text><text x="232" y="286" fill="var(--muted)" text-anchor="end">54</text>
-<text x="20" y="312" fill="var(--fg)" font-weight="bold">▾ Radio (v2)</text>
-<text x="36" y="332" fill="var(--muted)">Groove Salad</text>
-<text x="36" y="352" fill="var(--muted)">NTS 1</text>
-<text x="20" y="378" fill="var(--fg)" font-weight="bold">▾ Smart</text>
-<text x="36" y="398" fill="var(--fg)">Most played</text>
-<text x="36" y="418" fill="var(--fg)">Never played</text>
-<text x="36" y="438" fill="var(--fg)">Added this week</text>
-<rect x="252" y="8" width="700" height="270" rx="6" fill="none" stroke="var(--border)"/>
-<rect x="256" y="12" width="692" height="22" rx="3" fill="var(--border)" opacity="0.45"/>
-<text x="264" y="27" fill="var(--fg)" font-weight="bold">Night Signals · Neon Harbor · 2024</text>
-<text x="940" y="27" fill="var(--muted)" text-anchor="end">enter play  a queue  A next  / search</text>
-<g fill="var(--fg)">
-<text x="290" y="54" fill="var(--muted)">1</text><text x="320" y="54">Low Tide</text><text x="930" y="54" text-anchor="end" fill="var(--muted)">4:34</text>
-<text x="290" y="74" fill="var(--muted)">2</text><text x="320" y="74">Signal Fire</text><text x="930" y="74" text-anchor="end" fill="var(--muted)">5:21</text>
-<text x="290" y="94" fill="var(--muted)">3</text><text x="320" y="94">Glass City</text><text x="930" y="94" text-anchor="end" fill="var(--muted)">9:04</text>
-<text x="290" y="114" fill="var(--muted)">4</text><text x="320" y="114">Afterglow</text><text x="930" y="114" text-anchor="end" fill="var(--muted)">3:48</text>
-<text x="268" y="134" fill="var(--accent)">♪</text><text x="290" y="134" fill="var(--accent)">5</text><text x="320" y="134" fill="var(--accent)" font-weight="bold">Night Drive</text><text x="930" y="134" text-anchor="end" fill="var(--accent)">5:37</text>
-<text x="290" y="154" fill="var(--muted)">6</text><text x="320" y="154">Paper Moons</text><text x="930" y="154" text-anchor="end" fill="var(--muted)">5:53</text>
-<rect x="258" y="161" width="688" height="19" rx="2" fill="var(--border)" opacity="0.5"/>
-<text x="268" y="174" fill="var(--fg)">→</text><text x="290" y="174" fill="var(--muted)">7</text><text x="320" y="174" font-weight="bold">Satellite Hearts</text><text x="930" y="174" text-anchor="end" fill="var(--muted)">8:18</text>
-<text x="290" y="194" fill="var(--muted)">8</text><text x="320" y="194">Static Bloom</text><text x="930" y="194" text-anchor="end" fill="var(--muted)">6:09</text>
-<text x="290" y="214" fill="var(--muted)">9</text><text x="320" y="214">Harbor Lights</text><text x="930" y="214" text-anchor="end" fill="var(--muted)">4:50</text>
-<text x="284" y="234" fill="var(--muted)">10</text><text x="320" y="234">Last Train Home</text><text x="930" y="234" text-anchor="end" fill="var(--muted)">5:41</text>
+<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" xml:space="preserve">
+<!-- A. Library. Colors = catppuccin-mocha (fixed hex so every viewer shows them); real app uses the active theme. -->
+<rect width="960" height="520" fill="#1e1e2e"/>
+<rect x="8" y="8" width="236" height="466" rx="6" fill="none" stroke="#89b4fa" stroke-width="1.5"/>
+<rect x="12" y="12" width="228" height="22" rx="3" fill="#89b4fa"/>
+<text x="20" y="27" fill="#1e1e2e" font-weight="bold">Library</text>
+<text x="232" y="27" fill="#1e1e2e" text-anchor="end">j/k · enter</text>
+<text x="20" y="54" fill="#89b4fa">♪ Now Playing</text>
+<text x="20" y="74" fill="#cdd6f4">  Queue</text><text x="232" y="74" fill="#7f849c" text-anchor="end">12</text>
+<text x="20" y="100" fill="#cdd6f4" font-weight="bold">▾ Library</text>
+<text x="36" y="120" fill="#cdd6f4">Artists</text>
+<rect x="14" y="127" width="224" height="19" rx="2" fill="#89b4fa" opacity="0.2"/>
+<text x="22" y="140" fill="#89b4fa">→</text><text x="36" y="140" fill="#cdd6f4" font-weight="bold">Albums</text>
+<text x="36" y="160" fill="#cdd6f4">Tracks</text>
+<text x="36" y="180" fill="#cdd6f4">Genres</text>
+<text x="36" y="200" fill="#cdd6f4">Folders</text>
+<text x="20" y="226" fill="#cdd6f4" font-weight="bold">▾ Playlists</text>
+<text x="36" y="246" fill="#cdd6f4">Late night</text><text x="232" y="246" fill="#7f849c" text-anchor="end">38</text>
+<text x="36" y="266" fill="#cdd6f4">Deep focus</text><text x="232" y="266" fill="#7f849c" text-anchor="end">112</text>
+<text x="36" y="286" fill="#cdd6f4">Gym</text><text x="232" y="286" fill="#7f849c" text-anchor="end">54</text>
+<text x="20" y="312" fill="#cdd6f4" font-weight="bold">▾ Radio (v2)</text>
+<text x="36" y="332" fill="#7f849c">Groove Salad</text>
+<text x="36" y="352" fill="#7f849c">NTS 1</text>
+<text x="20" y="378" fill="#cdd6f4" font-weight="bold">▾ Smart</text>
+<text x="36" y="398" fill="#cdd6f4">Most played</text>
+<text x="36" y="418" fill="#cdd6f4">Never played</text>
+<text x="36" y="438" fill="#cdd6f4">Added this week</text>
+<rect x="252" y="8" width="700" height="270" rx="6" fill="none" stroke="#45475a"/>
+<rect x="256" y="12" width="692" height="22" rx="3" fill="#45475a" opacity="0.45"/>
+<text x="264" y="27" fill="#cdd6f4" font-weight="bold">Night Signals · Neon Harbor · 2024</text>
+<text x="940" y="27" fill="#7f849c" text-anchor="end">enter play  a queue  A next  / search</text>
+<g fill="#cdd6f4">
+<text x="290" y="54" fill="#7f849c">1</text><text x="320" y="54">Low Tide</text><text x="930" y="54" text-anchor="end" fill="#7f849c">4:34</text>
+<text x="290" y="74" fill="#7f849c">2</text><text x="320" y="74">Signal Fire</text><text x="930" y="74" text-anchor="end" fill="#7f849c">5:21</text>
+<text x="290" y="94" fill="#7f849c">3</text><text x="320" y="94">Glass City</text><text x="930" y="94" text-anchor="end" fill="#7f849c">9:04</text>
+<text x="290" y="114" fill="#7f849c">4</text><text x="320" y="114">Afterglow</text><text x="930" y="114" text-anchor="end" fill="#7f849c">3:48</text>
+<text x="268" y="134" fill="#89b4fa">♪</text><text x="290" y="134" fill="#89b4fa">5</text><text x="320" y="134" fill="#89b4fa" font-weight="bold">Night Drive</text><text x="930" y="134" text-anchor="end" fill="#89b4fa">5:37</text>
+<text x="290" y="154" fill="#7f849c">6</text><text x="320" y="154">Paper Moons</text><text x="930" y="154" text-anchor="end" fill="#7f849c">5:53</text>
+<rect x="258" y="161" width="688" height="19" rx="2" fill="#45475a" opacity="0.5"/>
+<text x="268" y="174" fill="#cdd6f4">→</text><text x="290" y="174" fill="#7f849c">7</text><text x="320" y="174" font-weight="bold">Satellite Hearts</text><text x="930" y="174" text-anchor="end" fill="#7f849c">8:18</text>
+<text x="290" y="194" fill="#7f849c">8</text><text x="320" y="194">Static Bloom</text><text x="930" y="194" text-anchor="end" fill="#7f849c">6:09</text>
+<text x="290" y="214" fill="#7f849c">9</text><text x="320" y="214">Harbor Lights</text><text x="930" y="214" text-anchor="end" fill="#7f849c">4:50</text>
+<text x="284" y="234" fill="#7f849c">10</text><text x="320" y="234">Last Train Home</text><text x="930" y="234" text-anchor="end" fill="#7f849c">5:41</text>
 </g>
-<rect x="252" y="286" width="700" height="188" rx="6" fill="none" stroke="var(--border)"/>
-<rect x="256" y="290" width="692" height="22" rx="3" fill="var(--border)" opacity="0.45"/>
-<text x="264" y="305" fill="var(--fg)" font-weight="bold">Now Playing</text>
-<text x="940" y="305" fill="var(--muted)" text-anchor="end">space pause  n/p skip  ←/→ seek  z full</text>
-<rect x="264" y="322" width="140" height="140" rx="4" fill="var(--c2)" opacity="0.35"/>
-<circle cx="334" cy="392" r="44" fill="none" stroke="var(--c1)" stroke-width="6"/>
-<circle cx="334" cy="392" r="18" fill="var(--c3)" opacity="0.7"/>
-<text x="424" y="340" fill="var(--fg)" font-size="18" font-weight="bold">Night Drive</text>
-<text x="424" y="362" fill="var(--muted)">Neon Harbor · Night Signals · 2024</text>
-<text x="424" y="395" fill="var(--fg)">2:11</text>
-<line x1="464" y1="390" x2="880" y2="390" stroke="var(--border)" stroke-width="4" stroke-linecap="round"/>
-<line x1="464" y1="390" x2="624" y2="390" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
-<circle cx="624" cy="390" r="5" fill="var(--accent)"/>
-<text x="890" y="395" fill="var(--muted)">5:37</text>
-<text x="424" y="424" fill="var(--fg)" font-size="15">⏮  ⏸  ⏭</text>
-<text x="520" y="424" fill="var(--muted)">⇄ off   ↻ all</text>
-<text x="940" y="424" fill="var(--muted)" text-anchor="end">FLAC 24/96 · gapless · RG −6.2 dB</text>
-<g fill="var(--c1)"><rect x="424" y="460" width="8" height="6"/><rect x="435" y="456" width="8" height="10"/><rect x="446" y="452" width="8" height="14"/><rect x="457" y="448" width="8" height="18"/><rect x="468" y="444" width="8" height="22"/><rect x="479" y="446" width="8" height="20"/><rect x="490" y="450" width="8" height="16"/><rect x="501" y="454" width="8" height="12"/><rect x="512" y="451" width="8" height="15"/><rect x="523" y="447" width="8" height="19"/><rect x="534" y="444" width="8" height="22"/><rect x="545" y="445" width="8" height="21"/><rect x="556" y="449" width="8" height="17"/><rect x="567" y="453" width="8" height="13"/><rect x="578" y="456" width="8" height="10"/></g>
-<g fill="var(--c2)"><rect x="589" y="454" width="8" height="12"/><rect x="600" y="451" width="8" height="15"/><rect x="611" y="448" width="8" height="18"/><rect x="622" y="450" width="8" height="16"/><rect x="633" y="453" width="8" height="13"/><rect x="644" y="455" width="8" height="11"/><rect x="655" y="457" width="8" height="9"/><rect x="666" y="454" width="8" height="12"/><rect x="677" y="452" width="8" height="14"/><rect x="688" y="450" width="8" height="16"/><rect x="699" y="453" width="8" height="13"/><rect x="710" y="455" width="8" height="11"/><rect x="721" y="457" width="8" height="9"/><rect x="732" y="458" width="8" height="8"/><rect x="743" y="456" width="8" height="10"/></g>
-<g fill="var(--c3)"><rect x="754" y="454" width="8" height="12"/><rect x="765" y="455" width="8" height="11"/><rect x="776" y="457" width="8" height="9"/><rect x="787" y="458" width="8" height="8"/><rect x="798" y="459" width="8" height="7"/><rect x="809" y="457" width="8" height="9"/><rect x="820" y="456" width="8" height="10"/><rect x="831" y="458" width="8" height="8"/><rect x="842" y="459" width="8" height="7"/><rect x="853" y="460" width="8" height="6"/><rect x="864" y="459" width="8" height="7"/><rect x="875" y="458" width="8" height="8"/><rect x="886" y="460" width="8" height="6"/><rect x="897" y="461" width="8" height="5"/><rect x="908" y="460" width="8" height="6"/><rect x="919" y="461" width="8" height="5"/></g>
-<rect x="8" y="484" width="944" height="26" rx="3" fill="var(--accent)" opacity="0.18"/>
-<text x="18" y="502" fill="var(--fg)">♪ playing · 12 in queue · vol 70%</text>
-<text x="942" y="502" fill="var(--muted)" text-anchor="end">/ search · q queue · t themes · S settings · ? help</text>
+<rect x="252" y="286" width="700" height="188" rx="6" fill="none" stroke="#45475a"/>
+<rect x="256" y="290" width="692" height="22" rx="3" fill="#45475a" opacity="0.45"/>
+<text x="264" y="305" fill="#cdd6f4" font-weight="bold">Now Playing</text>
+<text x="940" y="305" fill="#7f849c" text-anchor="end">space pause  n/p skip  ←/→ seek  z full</text>
+<rect x="264" y="322" width="140" height="140" rx="4" fill="#cba6f7" opacity="0.35"/>
+<circle cx="334" cy="392" r="44" fill="none" stroke="#89b4fa" stroke-width="6"/>
+<circle cx="334" cy="392" r="18" fill="#f5c2e7" opacity="0.7"/>
+<text x="424" y="340" fill="#cdd6f4" font-size="18" font-weight="bold">Night Drive</text>
+<text x="424" y="362" fill="#7f849c">Neon Harbor · Night Signals · 2024</text>
+<text x="424" y="395" fill="#cdd6f4">2:11</text>
+<line x1="464" y1="390" x2="880" y2="390" stroke="#45475a" stroke-width="4" stroke-linecap="round"/>
+<line x1="464" y1="390" x2="624" y2="390" stroke="#89b4fa" stroke-width="4" stroke-linecap="round"/>
+<circle cx="624" cy="390" r="5" fill="#89b4fa"/>
+<text x="890" y="395" fill="#7f849c">5:37</text>
+<text x="424" y="424" fill="#cdd6f4" font-size="15">⏮  ⏸  ⏭</text>
+<text x="566" y="424" fill="#7f849c">⇄ off   ↻ all</text>
+<text x="940" y="424" fill="#7f849c" text-anchor="end">FLAC 24/96 · gapless · RG −6.2 dB</text>
+<g fill="#89b4fa"><rect x="424" y="460" width="8" height="6"/><rect x="435" y="456" width="8" height="10"/><rect x="446" y="452" width="8" height="14"/><rect x="457" y="448" width="8" height="18"/><rect x="468" y="444" width="8" height="22"/><rect x="479" y="446" width="8" height="20"/><rect x="490" y="450" width="8" height="16"/><rect x="501" y="454" width="8" height="12"/><rect x="512" y="451" width="8" height="15"/><rect x="523" y="447" width="8" height="19"/><rect x="534" y="444" width="8" height="22"/><rect x="545" y="445" width="8" height="21"/><rect x="556" y="449" width="8" height="17"/><rect x="567" y="453" width="8" height="13"/><rect x="578" y="456" width="8" height="10"/></g>
+<g fill="#cba6f7"><rect x="589" y="454" width="8" height="12"/><rect x="600" y="451" width="8" height="15"/><rect x="611" y="448" width="8" height="18"/><rect x="622" y="450" width="8" height="16"/><rect x="633" y="453" width="8" height="13"/><rect x="644" y="455" width="8" height="11"/><rect x="655" y="457" width="8" height="9"/><rect x="666" y="454" width="8" height="12"/><rect x="677" y="452" width="8" height="14"/><rect x="688" y="450" width="8" height="16"/><rect x="699" y="453" width="8" height="13"/><rect x="710" y="455" width="8" height="11"/><rect x="721" y="457" width="8" height="9"/><rect x="732" y="458" width="8" height="8"/><rect x="743" y="456" width="8" height="10"/></g>
+<g fill="#f5c2e7"><rect x="754" y="454" width="8" height="12"/><rect x="765" y="455" width="8" height="11"/><rect x="776" y="457" width="8" height="9"/><rect x="787" y="458" width="8" height="8"/><rect x="798" y="459" width="8" height="7"/><rect x="809" y="457" width="8" height="9"/><rect x="820" y="456" width="8" height="10"/><rect x="831" y="458" width="8" height="8"/><rect x="842" y="459" width="8" height="7"/><rect x="853" y="460" width="8" height="6"/><rect x="864" y="459" width="8" height="7"/><rect x="875" y="458" width="8" height="8"/><rect x="886" y="460" width="8" height="6"/><rect x="897" y="461" width="8" height="5"/><rect x="908" y="460" width="8" height="6"/><rect x="919" y="461" width="8" height="5"/></g>
+<rect x="8" y="484" width="944" height="26" rx="3" fill="#89b4fa" opacity="0.18"/>
+<text x="18" y="502" fill="#cdd6f4">♪ playing · 12 in queue · vol 70%</text>
+<text x="942" y="502" fill="#7f849c" text-anchor="end">/ search · q queue · t themes · S settings · ? help</text>
 </svg>

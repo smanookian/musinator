@@ -1,52 +1,52 @@
-<svg viewBox="0 0 960 400" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" xml:space="preserve" style="--fg:#cdd6f4;--muted:#7f849c;--border:#45475a;--surface:#1e1e2e;--accent:#89b4fa;--c1:#89b4fa;--c2:#cba6f7;--c3:#f5c2e7">
+<svg viewBox="0 0 960 400" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" xml:space="preserve">
 <!-- B. Now Playing (z toggles from Library), plus mini mode (v1.1) and Omarchy bar module. Lyrics are invented placeholder text. -->
-<rect width="960" height="400" fill="var(--surface)"/>
-<rect x="8" y="8" width="636" height="384" rx="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
-<rect x="12" y="12" width="628" height="22" rx="3" fill="var(--accent)"/>
-<text x="20" y="27" fill="var(--surface)" font-weight="bold">Now Playing</text>
-<text x="632" y="27" fill="var(--surface)" text-anchor="end">z back · l lyrics · v visualizer</text>
-<rect x="24" y="46" width="220" height="220" rx="6" fill="var(--c2)" opacity="0.35"/>
-<circle cx="134" cy="156" r="70" fill="none" stroke="var(--c1)" stroke-width="9"/>
-<circle cx="134" cy="156" r="28" fill="var(--c3)" opacity="0.7"/>
-<text x="264" y="72" fill="var(--fg)" font-size="22" font-weight="bold">Night Drive</text>
-<text x="264" y="96" fill="var(--fg)">Neon Harbor</text>
-<text x="264" y="116" fill="var(--muted)">Night Signals · 2024 · track 5 of 10</text>
-<text x="264" y="156" fill="var(--muted)">City lights are fading slow</text>
-<text x="264" y="180" fill="var(--muted)">We keep running through the night</text>
-<text x="264" y="206" fill="var(--accent)" font-size="15" font-weight="bold">♪ Hold on, the morning is near</text>
-<text x="264" y="232" fill="var(--fg)">Every street becomes a song</text>
-<text x="264" y="256" fill="var(--muted)">Turn it up and let it go</text>
-<text x="24" y="295" fill="var(--fg)">2:11</text>
-<line x1="64" y1="290" x2="584" y2="290" stroke="var(--border)" stroke-width="4" stroke-linecap="round"/>
-<line x1="64" y1="290" x2="264" y2="290" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
-<circle cx="264" cy="290" r="6" fill="var(--accent)"/>
-<text x="594" y="295" fill="var(--muted)">5:37</text>
-<text x="24" y="322" fill="var(--fg)" font-size="15">⏮  ⏸  ⏭</text>
-<text x="120" y="322" fill="var(--muted)">⇄ off   ↻ all   vol 70%</text>
-<g fill="var(--c1)"><rect x="24" y="370" width="10" height="12"/><rect x="37" y="362" width="10" height="20"/><rect x="50" y="354" width="10" height="28"/><rect x="63" y="346" width="10" height="36"/><rect x="76" y="338" width="10" height="44"/><rect x="89" y="342" width="10" height="40"/><rect x="102" y="350" width="10" height="32"/><rect x="115" y="358" width="10" height="24"/><rect x="128" y="352" width="10" height="30"/><rect x="141" y="344" width="10" height="38"/><rect x="154" y="338" width="10" height="44"/><rect x="167" y="340" width="10" height="42"/><rect x="180" y="348" width="10" height="34"/><rect x="193" y="356" width="10" height="26"/><rect x="206" y="362" width="10" height="20"/></g>
-<g fill="var(--c2)"><rect x="219" y="358" width="10" height="24"/><rect x="232" y="352" width="10" height="30"/><rect x="245" y="346" width="10" height="36"/><rect x="258" y="350" width="10" height="32"/><rect x="271" y="356" width="10" height="26"/><rect x="284" y="360" width="10" height="22"/><rect x="297" y="364" width="10" height="18"/><rect x="310" y="358" width="10" height="24"/><rect x="323" y="354" width="10" height="28"/><rect x="336" y="350" width="10" height="32"/><rect x="349" y="356" width="10" height="26"/><rect x="362" y="360" width="10" height="22"/><rect x="375" y="364" width="10" height="18"/><rect x="388" y="366" width="10" height="16"/><rect x="401" y="362" width="10" height="20"/></g>
-<g fill="var(--c3)"><rect x="414" y="358" width="10" height="24"/><rect x="427" y="360" width="10" height="22"/><rect x="440" y="364" width="10" height="18"/><rect x="453" y="366" width="10" height="16"/><rect x="466" y="368" width="10" height="14"/><rect x="479" y="364" width="10" height="18"/><rect x="492" y="362" width="10" height="20"/><rect x="505" y="366" width="10" height="16"/><rect x="518" y="368" width="10" height="14"/><rect x="531" y="370" width="10" height="12"/><rect x="544" y="368" width="10" height="14"/><rect x="557" y="366" width="10" height="16"/><rect x="570" y="370" width="10" height="12"/><rect x="583" y="372" width="10" height="10"/><rect x="596" y="370" width="10" height="12"/><rect x="609" y="372" width="10" height="10"/></g>
-<rect x="656" y="8" width="296" height="222" rx="6" fill="none" stroke="var(--border)"/>
-<rect x="660" y="12" width="288" height="22" rx="3" fill="var(--border)" opacity="0.45"/>
-<text x="668" y="27" fill="var(--fg)" font-weight="bold">Up next · 12</text>
-<text x="940" y="27" fill="var(--muted)" text-anchor="end">J/K move · d remove</text>
-<g fill="var(--fg)">
-<text x="668" y="54">Paper Moons</text><text x="940" y="54" text-anchor="end" fill="var(--muted)">5:53</text>
-<text x="668" y="74">Satellite Hearts</text><text x="940" y="74" text-anchor="end" fill="var(--muted)">8:18</text>
-<text x="668" y="94">Static Bloom</text><text x="940" y="94" text-anchor="end" fill="var(--muted)">6:09</text>
-<text x="668" y="114">Harbor Lights</text><text x="940" y="114" text-anchor="end" fill="var(--muted)">4:50</text>
-<text x="668" y="134">Last Train Home</text><text x="940" y="134" text-anchor="end" fill="var(--muted)">5:41</text>
-<text x="668" y="154" fill="var(--muted)">from: Late night</text>
-<text x="668" y="174">Slow Orbit</text><text x="940" y="174" text-anchor="end" fill="var(--muted)">4:12</text>
-<text x="668" y="194">Blue Hour</text><text x="940" y="194" text-anchor="end" fill="var(--muted)">3:57</text>
+<rect width="960" height="400" fill="#1e1e2e"/>
+<rect x="8" y="8" width="636" height="384" rx="6" fill="none" stroke="#89b4fa" stroke-width="1.5"/>
+<rect x="12" y="12" width="628" height="22" rx="3" fill="#89b4fa"/>
+<text x="20" y="27" fill="#1e1e2e" font-weight="bold">Now Playing</text>
+<text x="632" y="27" fill="#1e1e2e" text-anchor="end">z back · l lyrics · v visualizer</text>
+<rect x="24" y="46" width="220" height="220" rx="6" fill="#cba6f7" opacity="0.35"/>
+<circle cx="134" cy="156" r="70" fill="none" stroke="#89b4fa" stroke-width="9"/>
+<circle cx="134" cy="156" r="28" fill="#f5c2e7" opacity="0.7"/>
+<text x="264" y="72" fill="#cdd6f4" font-size="22" font-weight="bold">Night Drive</text>
+<text x="264" y="96" fill="#cdd6f4">Neon Harbor</text>
+<text x="264" y="116" fill="#7f849c">Night Signals · 2024 · track 5 of 10</text>
+<text x="264" y="156" fill="#7f849c">City lights are fading slow</text>
+<text x="264" y="180" fill="#7f849c">We keep running through the night</text>
+<text x="264" y="206" fill="#89b4fa" font-size="15" font-weight="bold">♪ Hold on, the morning is near</text>
+<text x="264" y="232" fill="#cdd6f4">Every street becomes a song</text>
+<text x="264" y="256" fill="#7f849c">Turn it up and let it go</text>
+<text x="24" y="295" fill="#cdd6f4">2:11</text>
+<line x1="64" y1="290" x2="584" y2="290" stroke="#45475a" stroke-width="4" stroke-linecap="round"/>
+<line x1="64" y1="290" x2="264" y2="290" stroke="#89b4fa" stroke-width="4" stroke-linecap="round"/>
+<circle cx="264" cy="290" r="6" fill="#89b4fa"/>
+<text x="594" y="295" fill="#7f849c">5:37</text>
+<text x="24" y="322" fill="#cdd6f4" font-size="15">⏮  ⏸  ⏭</text>
+<text x="168" y="322" fill="#7f849c">⇄ off   ↻ all   vol 70%</text>
+<g fill="#89b4fa"><rect x="24" y="370" width="10" height="12"/><rect x="37" y="362" width="10" height="20"/><rect x="50" y="354" width="10" height="28"/><rect x="63" y="346" width="10" height="36"/><rect x="76" y="338" width="10" height="44"/><rect x="89" y="342" width="10" height="40"/><rect x="102" y="350" width="10" height="32"/><rect x="115" y="358" width="10" height="24"/><rect x="128" y="352" width="10" height="30"/><rect x="141" y="344" width="10" height="38"/><rect x="154" y="338" width="10" height="44"/><rect x="167" y="340" width="10" height="42"/><rect x="180" y="348" width="10" height="34"/><rect x="193" y="356" width="10" height="26"/><rect x="206" y="362" width="10" height="20"/></g>
+<g fill="#cba6f7"><rect x="219" y="358" width="10" height="24"/><rect x="232" y="352" width="10" height="30"/><rect x="245" y="346" width="10" height="36"/><rect x="258" y="350" width="10" height="32"/><rect x="271" y="356" width="10" height="26"/><rect x="284" y="360" width="10" height="22"/><rect x="297" y="364" width="10" height="18"/><rect x="310" y="358" width="10" height="24"/><rect x="323" y="354" width="10" height="28"/><rect x="336" y="350" width="10" height="32"/><rect x="349" y="356" width="10" height="26"/><rect x="362" y="360" width="10" height="22"/><rect x="375" y="364" width="10" height="18"/><rect x="388" y="366" width="10" height="16"/><rect x="401" y="362" width="10" height="20"/></g>
+<g fill="#f5c2e7"><rect x="414" y="358" width="10" height="24"/><rect x="427" y="360" width="10" height="22"/><rect x="440" y="364" width="10" height="18"/><rect x="453" y="366" width="10" height="16"/><rect x="466" y="368" width="10" height="14"/><rect x="479" y="364" width="10" height="18"/><rect x="492" y="362" width="10" height="20"/><rect x="505" y="366" width="10" height="16"/><rect x="518" y="368" width="10" height="14"/><rect x="531" y="370" width="10" height="12"/><rect x="544" y="368" width="10" height="14"/><rect x="557" y="366" width="10" height="16"/><rect x="570" y="370" width="10" height="12"/><rect x="583" y="372" width="10" height="10"/><rect x="596" y="370" width="10" height="12"/><rect x="609" y="372" width="10" height="10"/></g>
+<rect x="656" y="8" width="296" height="222" rx="6" fill="none" stroke="#45475a"/>
+<rect x="660" y="12" width="288" height="22" rx="3" fill="#45475a" opacity="0.45"/>
+<text x="668" y="27" fill="#cdd6f4" font-weight="bold">Up next · 12</text>
+<text x="940" y="27" fill="#7f849c" text-anchor="end">J/K move · d remove</text>
+<g fill="#cdd6f4">
+<text x="668" y="54">Paper Moons</text><text x="940" y="54" text-anchor="end" fill="#7f849c">5:53</text>
+<text x="668" y="74">Satellite Hearts</text><text x="940" y="74" text-anchor="end" fill="#7f849c">8:18</text>
+<text x="668" y="94">Static Bloom</text><text x="940" y="94" text-anchor="end" fill="#7f849c">6:09</text>
+<text x="668" y="114">Harbor Lights</text><text x="940" y="114" text-anchor="end" fill="#7f849c">4:50</text>
+<text x="668" y="134">Last Train Home</text><text x="940" y="134" text-anchor="end" fill="#7f849c">5:41</text>
+<text x="668" y="154" fill="#7f849c">from: Late night</text>
+<text x="668" y="174">Slow Orbit</text><text x="940" y="174" text-anchor="end" fill="#7f849c">4:12</text>
+<text x="668" y="194">Blue Hour</text><text x="940" y="194" text-anchor="end" fill="#7f849c">3:57</text>
 </g>
-<text x="656" y="256" fill="var(--muted)">mini mode · 3 lines (v1.1)</text>
-<rect x="656" y="264" width="296" height="72" rx="6" fill="none" stroke="var(--border)"/>
-<text x="668" y="288" fill="var(--accent)">♪ Night Drive</text><text x="940" y="288" fill="var(--muted)" text-anchor="end">Neon Harbor</text>
-<line x1="668" y1="304" x2="940" y2="304" stroke="var(--border)" stroke-width="3" stroke-linecap="round"/>
-<line x1="668" y1="304" x2="772" y2="304" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
-<text x="668" y="326" fill="var(--fg)">⏮ ⏸ ⏭</text><text x="940" y="326" fill="var(--muted)" text-anchor="end">2:11 / 5:37</text>
-<rect x="656" y="348" width="296" height="24" rx="4" fill="var(--accent)" opacity="0.15"/>
-<text x="668" y="365" fill="var(--fg)">♪ Night Drive · Neon Harbor</text><text x="940" y="365" fill="var(--muted)" text-anchor="end">2:11</text>
-<text x="656" y="390" fill="var(--muted)">Omarchy bar module (--bar)</text>
+<text x="656" y="256" fill="#7f849c">mini mode · 3 lines (v1.1)</text>
+<rect x="656" y="264" width="296" height="72" rx="6" fill="none" stroke="#45475a"/>
+<text x="668" y="288" fill="#89b4fa">♪ Night Drive</text><text x="940" y="288" fill="#7f849c" text-anchor="end">Neon Harbor</text>
+<line x1="668" y1="304" x2="940" y2="304" stroke="#45475a" stroke-width="3" stroke-linecap="round"/>
+<line x1="668" y1="304" x2="772" y2="304" stroke="#89b4fa" stroke-width="3" stroke-linecap="round"/>
+<text x="668" y="326" fill="#cdd6f4">⏮ ⏸ ⏭</text><text x="940" y="326" fill="#7f849c" text-anchor="end">2:11 / 5:37</text>
+<rect x="656" y="348" width="296" height="24" rx="4" fill="#89b4fa" opacity="0.15"/>
+<text x="668" y="365" fill="#cdd6f4">♪ Night Drive · Neon Harbor</text><text x="940" y="365" fill="#7f849c" text-anchor="end">2:11</text>
+<text x="656" y="390" fill="#7f849c">Omarchy bar module (--bar)</text>
 </svg>
