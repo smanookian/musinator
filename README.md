@@ -31,12 +31,6 @@ New here? Read the [guide](docs/guide.md).
 
 ## Install
 
-**Arch / Omarchy (AUR):**
-
-```sh
-yay -S musinator-bin
-```
-
 **Script** (installs to `~/.local/bin`, no sudo):
 
 ```sh
@@ -50,6 +44,8 @@ git clone https://github.com/smanookian/musinator && cd musinator && ./install.s
 ```
 
 Needs PipeWire and libopus (`sudo pacman -S pipewire opus`). Building needs Rust, clang and `libpipewire` headers.
+
+An AUR package (`musinator-bin`) is coming.
 
 Then run `musinator`. It scans `~/Music` in the background. Add other folders in **Settings → Library**.
 
