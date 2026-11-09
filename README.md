@@ -82,7 +82,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `/` | search everything |
 | `z` | Library ↔ Now Playing |
 | `l` / `v` | lyrics / visualizer on or off |
-| `q` | queue |
+| `Q` | queue |
 | `t` | themes (previews live, `esc` undoes) |
 | `S` | settings |
 | `?` | help |
@@ -103,7 +103,7 @@ All keys can be changed in **Settings → Keys**. Press `?` for searchable help.
 | `[` / `]` | lyrics 0.5 s earlier / later for this song (saved per song) |
 | `ctrl+t` | sleep timer (minutes, end of song, end of album) |
 | `ctrl+r` | rescan music folders |
-| `Q` or `ctrl+c` | quit (asks first; turn that off in Settings → Playback) |
+| `q` or `ctrl+c` | quit (asks first; turn that off in Settings → Playback) |
 
 ## Command line
 

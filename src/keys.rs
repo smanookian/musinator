@@ -105,7 +105,7 @@ actions! {
     MoveDown "move_down" "Queue" "Move item down" ["J"];
     MoveUp "move_up" "Queue" "Move item up" ["K"];
     Remove "remove" "Queue" "Remove item" ["d", "delete"];
-    Queue "queue" "Queue" "Show queue" ["q"];
+    Queue "queue" "Queue" "Show queue" ["Q"];
     ClearQueue "clear_queue" "Queue" "Clear queue" ["X"];
     Search "search" "Find" "Search everything" ["/"];
     Like "like" "Library" "Like / unlike" ["L"];
@@ -147,7 +147,7 @@ actions! {
     Back "back" "Move" "Back / close" ["esc", "backspace"];
     PaneShrink "pane_shrink" "Move" "Left pane narrower" ["<"];
     PaneGrow "pane_grow" "Move" "Left pane wider" [">"];
-    Quit "quit" "App" "Quit" ["Q", "ctrl+c"];
+    Quit "quit" "App" "Quit" ["q", "ctrl+c"];
 }
 
 pub fn info(a: Action) -> &'static ActionInfo {

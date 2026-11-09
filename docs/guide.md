@@ -92,7 +92,7 @@ changes too. You can click a hint to press that key.
 - left: state, songs in the queue and volume, e.g.
   `♪ playing · 12 in queue · vol 70%`, plus scan progress, sleep timer and
   online lookups. Short messages (like `Shuffle on`) show here for a few seconds.
-- right: `/ search · q queue · t themes · S settings · ? help`.
+- right: `/ search · Q queue · t themes · S settings · ? help`.
 
 **Mouse.** Click the player buttons (⏮ ⏸ ⏭, shuffle, repeat), the progress
 bar (jumps to that spot), any key hint, and rows in lists and windows. The
@@ -142,7 +142,7 @@ Notes:
 |-----|--------------|
 | `a` | add the selected song, album, artist or list to the end of the queue |
 | `A` | play it next |
-| `q` | show the queue |
+| `Q` | show the queue |
 | `J` / `K` | move the selected item down / up |
 | `d` / `delete` | remove it |
 | `X` | clear the queue |
@@ -580,7 +580,7 @@ All defaults. Keys with "or" have two defaults.
 | Move item down | `J` |
 | Move item up | `K` |
 | Remove item | `d` or `delete` |
-| Show queue | `q` |
+| Show queue | `Q` |
 | Clear queue | `X` |
 
 ### Find
@@ -643,7 +643,7 @@ All defaults. Keys with "or" have two defaults.
 
 | Action | Key |
 |--------|-----|
-| Quit | `Q` or `ctrl+c` |
+| Quit | `q` or `ctrl+c` |
 
 Quit asks first. Press `y` or `enter` to quit. Turn the question off with
 **Playback → Confirm before quitting**.
