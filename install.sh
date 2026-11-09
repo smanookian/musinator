@@ -43,6 +43,7 @@ if [ -n "$HERE" ] && [ -f "$HERE/Cargo.toml" ] && grep -q '^name = "musinator"' 
   (cd "$HERE" && cargo build --release --locked -p musinator)
   cp "$HERE/target/release/musinator" "$TMP/musinator"
   DESKTOP="$HERE/packaging/musinator.desktop"
+  ICON="$HERE/packaging/musinator.svg"
 else
   URL="https://github.com/$REPO/releases/latest/download/musinator-$ARCH-linux.tar.gz"
   say "Downloading $URL"
@@ -53,11 +54,14 @@ else
   fi
   tar -xzf "$TMP/m.tar.gz" -C "$TMP"
   DESKTOP="$TMP/musinator.desktop"
+  ICON="$TMP/musinator.svg"
 fi
 
 mkdir -p "$BIN_DIR" "$APP_DIR"
 install -m 755 "$TMP/musinator" "$BIN_DIR/musinator"
 [ -f "$DESKTOP" ] && install -m 644 "$DESKTOP" "$APP_DIR/musinator.desktop"
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+if [ -f "$ICON" ]; then mkdir -p "$ICON_DIR" && install -m 644 "$ICON" "$ICON_DIR/musinator.svg"; fi
 
 say "Installed $BIN_DIR/musinator"
 case ":$PATH:" in

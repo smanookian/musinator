@@ -26,7 +26,7 @@ jobs:
       - name: Package
         run: |
           mkdir dist
-          cp target/release/musinator packaging/musinator.desktop LICENSE README.md dist/
+          cp target/release/musinator packaging/musinator.desktop packaging/musinator.svg LICENSE README.md dist/
           tar -czf musinator-x86_64-linux.tar.gz -C dist .
           sha256sum musinator-x86_64-linux.tar.gz > musinator-x86_64-linux.tar.gz.sha256
       - name: Publish

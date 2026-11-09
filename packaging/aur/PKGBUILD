@@ -1,6 +1,6 @@
 # Maintainer: Stepan Manookian <jclstefan at yahoo dot de>
 pkgname=musinator-bin
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="A modern-looking terminal music player: gapless, ReplayGain, real album art, themes"
 arch=('x86_64')
@@ -16,6 +16,7 @@ sha256sums_x86_64=('SKIP')
 package() {
   install -Dm755 musinator "$pkgdir/usr/bin/musinator"
   install -Dm644 musinator.desktop "$pkgdir/usr/share/applications/musinator.desktop"
+  [ -f musinator.svg ] && install -Dm644 musinator.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/musinator.svg"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

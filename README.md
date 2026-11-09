@@ -1,3 +1,5 @@
+<img src="packaging/musinator.svg" alt="" width="64" height="64">
+
 # Musinator
 
 A modern-looking music player for the terminal. Linux and Omarchy first.
