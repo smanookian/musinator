@@ -29,9 +29,27 @@ Links:
 - Install: `curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.sh | sh`
 - Demo GIF: `docs/demo/musinator-demo.gif` · video: `docs/demo/musinator-demo.mp4`
 
+## Status (2026-11-11)
+
+Places, rules and flairs for every launch: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.md`.
+
+| Place | Status |
+|---|---|
+| Blog post | ✓ posted |
+| r/omarchy | ✓ posted (flair: I Made a Thing) |
+| r/unixporn | ✓ posted (flair: Material) |
+| r/CLI | ✓ posted |
+| r/tui | ✓ crossposted (flair: AI assisted) |
+| r/rust weekly thread | ✓ commented |
+| Hacker News (Show HN) | ✓ posted |
+| X | open: blocked as "automated" on first try; post 1 alone, then replies, without the curl line |
+| Omarchy Discord | open: https://discord.gg/tXFUdasqhY |
+| r/commandline | open: **on or after 2026-11-23**, written by you |
+| Mastodon | not used |
+
 ---
 
-## Show HN
+## Show HN (posted 2026-11-11)
 
 **Title** (80 char limit; this is 77):
 
@@ -146,7 +164,7 @@ MIT: https://github.com/smanookian/musinator
 I hope to see you next time. Steve out. Tschau!
 ```
 
-### r/CLI (ready to post now)
+### r/CLI (posted 2026-11-11)
 
 Rules (checked 2026-11-11): be kind, stay on topic (CLI/terminal), no spam, no NSFW. No AI or project-age rules. No post flairs.
 
@@ -173,7 +191,7 @@ Linux x86_64 only, no Spotify. MIT: https://github.com/smanookian/musinator
 I hope to see you next time. Steve out. Tschau!
 ```
 
-### r/tui (crosspost of the r/CLI post)
+### r/tui (crossposted 2026-11-11)
 
 Rules (checked 2026-11-11): AI-assisted code needs the flair **"AI assisted"** (required). Max one post per week per project. Crosspost from r/CLI is fine; body text optional.
 
@@ -185,7 +203,7 @@ Rules (checked 2026-11-11) that matter:
 - **List similar software and how yours is different** (required; facts in the r/CLI text).
 - Flair: **Terminal User Interface**.
 
-### r/rust (weekly thread only)
+### r/rust (commented 2026-11-11, weekly thread only)
 
 Rules (checked 2026-11-11): *"Applications who just happen to be written in Rust are not on-topic"*; progress on Rust projects goes in the stickied **"What's Everyone Working on this Week?"** thread. *"Submissions appearing to contain AI-generated content may be removed."* So: **no own post**, a short comment in that thread, in your own words. Facts for it:
 
@@ -212,9 +230,9 @@ A real r/rust post fits later only as a technical write-up (flair "🧠 educatio
 
 ---
 
-## X / Mastodon thread
+## X thread
 
-Post 1 with the video (`musinator-demo.mp4`), then reply to yourself with 2–6.
+Post 1 with the video (`musinator-demo.mp4`) and `#Omarchy #Linux #Rust`. Then add 2–6 as replies. Leave out the `curl` line in post 6 (X flags it); the app page has it.
 
 ```
 1/ So here is the thing about music in the terminal: fast, but it looks like 1998.
@@ -245,9 +263,7 @@ f opens full-screen lyrics with the current line in big letters.
 ```
 
 ```
-6/ One line, no sudo:
-curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.sh | sh
-
+6/ Install with one line, no sudo, on the page:
 https://stevinator.com/apps/musinator
 
 I hope to see you next time. Steve out. Tschau!
@@ -255,7 +271,9 @@ I hope to see you next time. Steve out. Tschau!
 
 ---
 
-## Omarchy Discord (day 2)
+## Omarchy Discord
+
+Invite: https://discord.gg/tXFUdasqhY. Post in the channel for sharing projects, not in announcements or support.
 
 ```
 So here is a new one for Omarchy: Musinator, a terminal music player. It follows your Omarchy theme live, works with the media keys, can show the song in the bar, and shows album covers as real pictures in Ghostty. Also synced lyrics, radio, podcasts and Navidrome/Jellyfin.
