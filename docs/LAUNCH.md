@@ -291,15 +291,7 @@ I hope to see you next time. Steve out. Tschau!
 
 **Medium:** https://medium.com/p/import → paste `https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal` → Import. Add at the end: "Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine." Topics: Rust, Linux, Open Source, Terminal, Music.
 
-**Substack** (a note, not the full post; attach the GIF):
-
-```
-So here is a new one. I built Musinator, a music player for the terminal that does not look like 1998: real album covers, lyrics in time with the song, 22 themes that switch live, plus radio, podcasts and your Navidrome or Jellyfin servers.
-
-Free and open source, for Omarchy and Linux. The whole story, including what broke along the way: https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal
-
-I hope to see you next time. Steve out. Tschau!
-```
+**Substack:** a full article on Stevinator Notes (https://smanookian.substack.com), like the Omarchy course post. Ready text: `docs/crosspost-substack.md`.
 
 ---
 
