@@ -47,11 +47,11 @@ if [ -n "$HERE" ] && [ -f "$HERE/Cargo.toml" ] && grep -q '^name = "musinator"' 
 else
   URL="https://github.com/$REPO/releases/latest/download/musinator-$ARCH-linux.tar.gz"
   say "Downloading $URL"
-  if ! curl -fsSL "$URL" -o "$TMP/m.tar.gz" 2>/dev/null; then
-    # Private repository: download with the GitHub CLI, which is signed in.
-    command -v gh >/dev/null || fail "download failed (private repository? install gh and run: gh auth login)"
-    gh release download -R "$REPO" -p "musinator-$ARCH-linux.tar.gz" -O "$TMP/m.tar.gz" || fail "download failed (no release yet?)"
-  fi
+  curl -fsSL "$URL" -o "$TMP/m.tar.gz" || fail "download failed: check that you are online"
+  curl -fsSL "$URL.sha256" -o "$TMP/m.sha256" || fail "could not download the checksum"
+  want=$(cut -d' ' -f1 "$TMP/m.sha256")
+  got=$(sha256sum "$TMP/m.tar.gz" | cut -d' ' -f1)
+  [ -n "$want" ] && [ "$want" = "$got" ] || fail "the download is damaged (checksum does not match); try again"
   tar -xzf "$TMP/m.tar.gz" -C "$TMP"
   DESKTOP="$TMP/musinator.desktop"
   ICON="$TMP/musinator.svg"

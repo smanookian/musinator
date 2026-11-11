@@ -195,6 +195,10 @@ pub struct App {
     pub art_file: Option<std::path::PathBuf>,
     /// Set when the song notification went out before its cover was ready.
     notify_waits_art: Option<Instant>,
+    /// A newer version found by the update check (U installs it).
+    pub update: Option<crate::update::Release>,
+    /// After quitting, start this program file (the freshly installed version).
+    pub restart: Option<std::path::PathBuf>,
     pub lyrics: Option<(TrackRef, Lyrics)>,
     pub viz: viz::Viz,
     pub status: Option<(String, bool, Instant)>,
@@ -404,6 +408,14 @@ impl App {
     pub fn error(&mut self, msg: impl Into<String>) {
         self.status = Some((plain(&msg.into()), true, Instant::now()));
         self.dirty = true;
+    }
+
+    /// Look for a new version. `asked`: the user wants an answer even if there is none.
+    pub fn check_update(&mut self, asked: bool) {
+        if asked {
+            self.info("Checking for updates…");
+        }
+        self.worker.send(Job::CheckUpdate { asked });
     }
 
     pub fn save_cfg(&mut self) {
@@ -1016,6 +1028,10 @@ impl App {
             Action::Themes => self.dialog = Some(Dialog::themes(self)),
             Action::Settings => self.dialog = Some(Dialog::settings()),
             Action::Help => self.dialog = Some(Dialog::help()),
+            Action::Update => match self.update.clone() {
+                Some(rel) => self.dialog = Some(Dialog::update(rel)),
+                None => self.check_update(true),
+            },
             Action::NextPane | Action::PrevPane => {
                 let order: &[Focus] = match self.screen {
                     Screen::Library => &[Focus::Side, Focus::List, Focus::Panel],
@@ -1539,6 +1555,33 @@ impl App {
                     self.reload_lists_matching(&n);
                 }
             }
+            Msg::UpdateFound { asked, res } => match res {
+                Ok(Some(rel)) if asked || !crate::update::skipped(&rel.version) => {
+                    if asked {
+                        self.dialog = Some(Dialog::update(rel.clone()));
+                    }
+                    self.update = Some(rel);
+                }
+                Ok(Some(_)) => {}
+                Ok(None) if asked => self.info(format!("You have the newest version (v{})", crate::update::current())),
+                Ok(None) => {}
+                Err(e) if asked => self.error(e),
+                Err(_) => {}
+            },
+            Msg::UpdateInstalled(res) => {
+                let version = self.update.take().map(|r| r.version).unwrap_or_default();
+                if let Some(Dialog::Update { state, .. }) = &mut self.dialog {
+                    *state = match res {
+                        Ok(path) => dialogs::UpdateState::Done(path),
+                        Err(e) => dialogs::UpdateState::Failed(e),
+                    };
+                } else {
+                    match res {
+                        Ok(_) => self.info(format!("Installed v{version}: restart Musinator to use it")),
+                        Err(e) => self.error(format!("Update failed: {e}")),
+                    }
+                }
+            }
             Msg::LastfmLogin(r) => match r {
                 Ok(u) => {
                     self.info(format!("Last.fm: logged in as {u}"));
@@ -2027,6 +2070,8 @@ pub fn run(cfg: Config) -> Result<()> {
         grid_pics: Default::default(),
         art_file: None,
         notify_waits_art: None,
+        update: None,
+        restart: None,
         lyrics: None,
         viz: viz::Viz::new(),
         status: None,
@@ -2074,6 +2119,11 @@ pub fn run(cfg: Config) -> Result<()> {
         && let Some(s) = session::load()
     {
         app.worker.send(Job::Restore(s));
+    }
+    if !app.cfg.update_asked {
+        app.dialog = Some(Dialog::UpdateAsk);
+    } else if app.cfg.update_check && crate::update::take_due() {
+        app.check_update(false);
     }
 
     let res = (|| -> Result<()> {
@@ -2124,7 +2174,13 @@ pub fn run(cfg: Config) -> Result<()> {
     app.save_session();
     app.engine.send(Cmd::Stop);
     ipc::cleanup();
-    res
+    res?;
+    if let Some(exe) = app.restart {
+        use std::os::unix::process::CommandExt;
+        let e = std::process::Command::new(&exe).exec();
+        anyhow::bail!("could not start the new version ({e}): start Musinator again");
+    }
+    Ok(())
 }
 
 fn engine_handle(e: &Engine) -> crate::mpris::EngineView {

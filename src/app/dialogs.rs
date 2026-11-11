@@ -122,6 +122,23 @@ pub enum Dialog {
         entries: Vec<(Option<i64>, String)>,
         cursor: usize,
     },
+    /// First start: may Musinator check for updates?
+    UpdateAsk,
+    /// A new version: what's new, install it, then restart.
+    Update {
+        rel: crate::update::Release,
+        state: UpdateState,
+    },
+}
+
+pub enum UpdateState {
+    Ready,
+    Installing,
+    /// Installed into this program file.
+    Done(std::path::PathBuf),
+    /// Musinator can't replace itself; the user runs a command.
+    Manual(crate::update::Manual),
+    Failed(String),
 }
 
 /// The tag editor: one song, or many (then only shared fields are shown).
@@ -394,6 +411,13 @@ impl Dialog {
     pub fn confirm(msg: String, what: Confirm) -> Self {
         Dialog::Confirm { msg, what }
     }
+    pub fn update(rel: crate::update::Release) -> Self {
+        let state = match crate::update::target() {
+            Ok(_) => UpdateState::Ready,
+            Err(m) => UpdateState::Manual(m),
+        };
+        Dialog::Update { rel, state }
+    }
     pub fn search() -> Self {
         Dialog::Search { input: String::new(), cursor: 0, offset: 0, typed: None }
     }
@@ -469,6 +493,47 @@ impl Dialog {
                     false
                 }
                 _ => !(esc || k.code == KeyCode::Char('n')),
+            },
+            Dialog::UpdateAsk => {
+                let yes = matches!(k.code, KeyCode::Char('y') | KeyCode::Enter);
+                if !yes && !(esc || k.code == KeyCode::Char('n')) {
+                    return true;
+                }
+                app.cfg.update_asked = true;
+                app.cfg.update_check = yes;
+                app.save_cfg();
+                if yes {
+                    app.info("Musinator checks for updates once a day");
+                    if crate::update::take_due() {
+                        app.check_update(false);
+                    }
+                } else {
+                    app.info("No update checks. Settings → Updates turns them on");
+                }
+                false
+            }
+            Dialog::Update { rel, state } => match (&*state, k.code) {
+                (UpdateState::Ready | UpdateState::Failed(_), KeyCode::Enter | KeyCode::Char('i')) => {
+                    *state = UpdateState::Installing;
+                    app.send_job(Job::InstallUpdate(rel.clone()));
+                    true
+                }
+                (UpdateState::Ready, KeyCode::Char('s')) => {
+                    crate::update::skip(&rel.version);
+                    app.update = None;
+                    app.info(format!("Skipped v{}. Settings → Updates → Check now shows it again", rel.version));
+                    false
+                }
+                (UpdateState::Done(path), KeyCode::Enter | KeyCode::Char('r')) => {
+                    app.restart = Some(path.clone());
+                    app.quit = true;
+                    false
+                }
+                (UpdateState::Manual(m), KeyCode::Char('c')) => {
+                    app.info(if copy(&m.cmd) { "Command copied" } else { "Could not copy: select the command with the mouse" });
+                    true
+                }
+                _ => !esc,
             },
             Dialog::Search { input, cursor, typed, .. } => {
                 let n = flat_hits(app).len();
@@ -981,6 +1046,62 @@ impl Dialog {
                 let b = f.buffer_mut();
                 put(b, inner.x + 2, inner.y + 1, msg, inner.width - 4, bold);
                 hints_row(b, inner, "y yes · esc cancel", muted);
+            }
+            Dialog::UpdateAsk => {
+                let inner = frame(f, app, 70, 8, "Updates");
+                let b = f.buffer_mut();
+                let w = inner.width - 4;
+                put(b, inner.x + 2, inner.y + 1, "Check for updates once a day?", w, bold);
+                put(b, inner.x + 2, inner.y + 3, "When it starts, Musinator asks GitHub whether a new version", w, text);
+                put(b, inner.x + 2, inner.y + 4, "is out. Nothing else is sent. Change it in Settings → Updates.", w, text);
+                hints_row(b, inner, "y yes · n no", muted);
+            }
+            Dialog::Update { rel, state } => {
+                // Wide enough for the whole command when the user has to run one.
+                let cmd = if let UpdateState::Manual(m) = &*state { m.cmd.width() as u16 + 10 } else { 0 };
+                let w: u16 = cmd.clamp(72, area.width.saturating_sub(4).max(72));
+                let body = w - 6;
+                let mut lines: Vec<(String, Style)> = vec![
+                    (format!("Musinator v{} is out. You have v{}.", rel.version, crate::update::current()), bold),
+                    (String::new(), text),
+                ];
+                let notes: Vec<String> = rel.notes.iter().flat_map(|l| wrap(l, body as usize)).collect();
+                let room = (area.height as usize).saturating_sub(14).clamp(3, 16);
+                lines.extend(notes.iter().take(room).map(|l| (l.clone(), text)));
+                if notes.len() > room {
+                    lines.push(("…".into(), muted));
+                }
+                lines.push((String::new(), text));
+                let (status, hint): (Vec<String>, &str) = match state {
+                    UpdateState::Ready => (vec![], "enter install · s skip this version · esc later"),
+                    UpdateState::Installing => (vec!["Downloading and checking…".into()], "esc hide (keeps going)"),
+                    UpdateState::Done(_) => (
+                        vec![
+                            format!("Installed v{}. Restart to use it: music stops for a moment,", rel.version),
+                            "then your queue comes back.".into(),
+                        ],
+                        "r restart now · esc later",
+                    ),
+                    UpdateState::Manual(m) => {
+                        let mut s = wrap(&m.why, body as usize);
+                        s.push("Run this in a terminal:".into());
+                        s.push(format!("  {}", m.cmd));
+                        (s, "c copy command · esc close")
+                    }
+                    UpdateState::Failed(e) => {
+                        let mut s = wrap(&format!("Update failed: {e}"), body as usize);
+                        s.push("Nothing was changed.".into());
+                        (s, "enter try again · esc close")
+                    }
+                };
+                let st = if matches!(state, UpdateState::Failed(_)) { Style::default().fg(c(t.error)).bg(c(t.dialog_bg)) } else { bold };
+                lines.extend(status.into_iter().map(|s| (s, st)));
+                let inner = frame(f, app, w, lines.len() as u16 + 3, "Update");
+                let b = f.buffer_mut();
+                for (i, (l, s)) in lines.iter().enumerate() {
+                    put(b, inner.x + 2, inner.y + 1 + i as u16, l, inner.width - 4, *s);
+                }
+                hints_row(b, inner, hint, muted);
             }
             Dialog::Input { title, label, value, what } => {
                 let inner = frame(f, app, 60, 6, title);
@@ -1633,6 +1754,10 @@ fn open_setting(app: &mut App, key: &str) -> bool {
             app.info("Scanning music folders");
             return false;
         }
+        "update_now" => {
+            app.check_update(true);
+            return false;
+        }
         _ => return false,
     }
     true
@@ -1766,4 +1891,30 @@ fn draw_eq(f: &mut Frame, app: &mut App, band: usize) {
     put(b, inner.x + 1, vy + 1, "Hz", 3, muted);
     hints_row(b, Rect { height: inner.height - 1, ..inner }, "←/→ band · ↑/↓ ±1 dB · 0 reset band · r flat", muted);
     hints_row(b, inner, "p / P preset · space on/off · esc close", muted);
+}
+
+/// Split `s` into lines of at most `w` columns, at spaces.
+fn wrap(s: &str, w: usize) -> Vec<String> {
+    let mut out = vec![String::new()];
+    for word in s.split(' ') {
+        let line = out.last_mut().expect("never empty");
+        if !line.is_empty() && line.width() + 1 + word.width() > w {
+            out.push(word.to_string());
+        } else {
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+    }
+    out
+}
+
+/// Put `s` on the Wayland clipboard.
+fn copy(s: &str) -> bool {
+    use std::io::Write;
+    std::process::Command::new("wl-copy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .is_ok_and(|mut ch| ch.stdin.take().is_some_and(|mut i| i.write_all(s.as_bytes()).is_ok()) && ch.wait().is_ok_and(|s| s.success()))
 }

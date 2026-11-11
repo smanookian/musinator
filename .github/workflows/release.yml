@@ -29,10 +29,15 @@ jobs:
           cp target/release/musinator packaging/musinator.desktop packaging/musinator.svg LICENSE README.md dist/
           tar -czf musinator-x86_64-linux.tar.gz -C dist .
           sha256sum musinator-x86_64-linux.tar.gz > musinator-x86_64-linux.tar.gz.sha256
+      - name: Release notes
+        run: |
+          # The CHANGELOG section for this version, without its heading.
+          awk -v v="## ${GITHUB_REF_NAME#v}" '$0 == v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for ${GITHUB_REF_NAME#v}"; exit 1; }
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" musinator-x86_64-linux.tar.gz musinator-x86_64-linux.tar.gz.sha256 \
-            --title "Musinator $GITHUB_REF_NAME" --notes "See README for install and keys." || \
+            --title "Musinator $GITHUB_REF_NAME" --notes-file notes.md || \
           gh release upload "$GITHUB_REF_NAME" musinator-x86_64-linux.tar.gz musinator-x86_64-linux.tar.gz.sha256 --clobber

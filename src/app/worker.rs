@@ -94,6 +94,11 @@ pub enum Job {
         query: String,
     },
     LastfmLogin,
+    /// Ask GitHub for the newest version. `asked`: the user wants an answer either way.
+    CheckUpdate {
+        asked: bool,
+    },
+    InstallUpdate(crate::update::Release),
     /// A stream address typed by the user.
     AddStream(String),
     WriteTags {
@@ -176,6 +181,13 @@ pub enum Msg {
     RadioFav(bool),
     /// Last.fm login finished: user name, or why not.
     LastfmLogin(Result<String, String>),
+    /// A newer version (None: this one is the newest), or why the check failed.
+    UpdateFound {
+        asked: bool,
+        res: Result<Option<crate::update::Release>, String>,
+    },
+    /// The new version is in place (the program file), or why not.
+    UpdateInstalled(Result<std::path::PathBuf, String>),
     /// Own stream checked and saved (its name), or why not.
     StreamAdded(Result<String, String>),
     MbResults(Result<Vec<crate::library::musicbrainz::Release>, String>),
@@ -574,6 +586,21 @@ fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
             let out = out.clone();
             std::thread::spawn(move || {
                 let _ = out.send(Msg::LastfmLogin(crate::lastfm::login().map_err(|e| format!("Last.fm: {e:#}"))));
+            });
+        }
+        Job::CheckUpdate { asked } => {
+            let out = out.clone();
+            std::thread::spawn(move || {
+                let res = crate::update::latest()
+                    .map(|r| crate::update::newer(&r.version, crate::update::current()).then_some(r))
+                    .map_err(|e| format!("Update check: {e:#}"));
+                let _ = out.send(Msg::UpdateFound { asked, res });
+            });
+        }
+        Job::InstallUpdate(rel) => {
+            let out = out.clone();
+            std::thread::spawn(move || {
+                let _ = out.send(Msg::UpdateInstalled(crate::update::install(&rel).map_err(|e| format!("{e:#}"))));
             });
         }
         Job::AddStream(url) => send(Msg::StreamAdded(radio.add_custom(&url).map_err(|e| format!("{e:#}")))),

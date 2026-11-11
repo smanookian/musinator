@@ -11,6 +11,7 @@ mod model;
 mod mpris;
 mod pwrate;
 mod source;
+mod update;
 
 const HELP: &str = "Musinator — a terminal music player
 
@@ -24,6 +25,7 @@ Usage:
   musinator stop            stop
   musinator status [--json] what is playing
   musinator --bar           one line of JSON for the Omarchy bar or Waybar
+  musinator update          install the newest version
   musinator --version
   musinator --help
 
@@ -34,6 +36,7 @@ fn main() {
     let json = args.iter().any(|a| a == "--json");
     let cmd = args.iter().find(|a| *a != "--json").map(String::as_str);
     let code = match cmd {
+        Some("update") => update::cli(),
         None => match app::run(config::Config::load()) {
             Ok(()) => 0,
             Err(e) => {

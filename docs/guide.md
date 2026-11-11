@@ -23,6 +23,7 @@ Every setting is inside the app. You never need to edit a file.
 - [Keys](#keys)
 - [Desktop](#desktop)
 - [Command line](#command-line)
+- [Updates](#updates)
 - [Files](#files)
 - [Problems and fixes](#problems-and-fixes)
 
@@ -42,6 +43,9 @@ What happens:
   The status bar shows `measuring loudness 40%`.
 - The **Albums** list opens.
 - On Omarchy, the theme is **Match Omarchy**. Elsewhere it is **Catppuccin Mocha**.
+- Musinator asks once: **Check for updates once a day?** `y` lets it ask GitHub
+  for the newest version when it starts (nothing else is sent). `n` means never.
+  See [Updates](#updates).
 
 Your music is somewhere else? Press `S`, go to **Library → Music folders**,
 press `enter`, then:
@@ -542,6 +546,13 @@ Changes apply at once and are saved.
 | Scrobble to Last.fm | On | Sends the songs you hear to your Last.fm profile. |
 | Scrobble radio songs | On | Also sends radio songs, when the station names them. |
 
+### Updates
+
+| Setting | Default | What it does |
+|---------|---------|--------------|
+| Check for updates | Your answer at the first start | Once a day when Musinator starts, asks GitHub whether a new version is out. |
+| Check now | | Looks for a new version now and opens the update window. |
+
 ### Keys
 
 | Setting | What it does |
@@ -643,6 +654,7 @@ All defaults. Keys with "or" have two defaults.
 
 | Action | Key |
 |--------|-----|
+| Install an update | `U` |
 | Quit | `q` or `ctrl+c` |
 
 Quit asks first. Press `y` or `enter` to quit. Turn the question off with
@@ -786,6 +798,7 @@ musinator stop            # stop
 musinator status          # what is playing
 musinator status --json   # the same, as JSON
 musinator --bar           # one line of JSON for the Omarchy bar or Waybar
+musinator update          # install the newest version (works without the app running)
 musinator --version
 musinator --help
 ```
@@ -801,6 +814,24 @@ When Musinator is not running, `status --json` prints
 `{"running":false,"state":"stopped"}` and `--bar` prints an empty line. The
 other commands print `musinator: Musinator is not running`.
 
+## Updates
+
+When a new version is out, the status bar says `v0.1.3 available: U update`.
+
+1. Press `U`. The window shows what's new.
+2. `enter` installs it: Musinator downloads it from GitHub, checks its SHA-256
+   checksum, and replaces its program file. If anything fails, nothing changes.
+3. `r` restarts Musinator with the new version. The music stops for a moment;
+   your queue and position come back.
+
+`s` skips that version (Settings → Updates → Check now still shows it). `esc`
+closes the window; `U` opens it again.
+
+Installed with a package manager (pacman, the AUR)? Then Musinator does not
+replace itself. The window shows the command to run instead, and `c` copies it.
+
+From a terminal: `musinator update`.
+
 ## Files
 
 | Path | What is in it |
@@ -811,6 +842,7 @@ other commands print `musinator: Musinator is not running`.
 | `~/.local/share/musinator/radio.db` | radio favorites and stations |
 | `~/.local/share/musinator/podcasts.db` | shows, episodes, where you stopped |
 | `~/.local/share/musinator/podcasts/` | downloaded episodes |
+| `~/.local/share/musinator/update.json` | when the last update check ran, a skipped version |
 | `~/.local/state/musinator/session.json` | queue and position, for resume |
 | `~/.local/state/musinator/lastfm.json` | Last.fm login and waiting scrobbles |
 | `~/.cache/musinator/art/` | cover cache |

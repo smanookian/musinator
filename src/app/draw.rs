@@ -1019,6 +1019,9 @@ fn status_bar(f: &mut Frame, app: &mut App, r: Rect) {
         if let Some(l) = app.lookup_label() {
             s.push_str(&format!(" · {l}…"));
         }
+        if let Some(u) = &app.update {
+            s.push_str(&format!(" · v{} available: {} update", u.version, app.keys.hint(Action::Update)));
+        }
         (format!(" {s}"), t.fg)
     };
     // Key hints on the right; drop them from the end before cutting the state text.

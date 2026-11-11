@@ -45,6 +45,10 @@ pub struct Config {
     pub podcast_auto_download: bool,
     pub lastfm_scrobble: bool,
     pub lastfm_radio: bool,
+    /// Ask GitHub once a day whether a new version is out.
+    pub update_check: bool,
+    /// The first-start question about update checks was answered.
+    pub update_asked: bool,
     pub eq_on: bool,
     pub eq_preset: String,
     pub eq_bands: [f32; 10],
@@ -86,6 +90,8 @@ impl Default for Config {
             podcast_auto_download: false,
             lastfm_scrobble: true,
             lastfm_radio: true,
+            update_check: false,
+            update_asked: false,
             eq_on: false,
             eq_preset: "Flat".into(),
             eq_bands: [0.0; 10],
@@ -172,7 +178,7 @@ pub struct Setting {
     pub kind: Kind,
 }
 
-pub const SECTIONS: &[&str] = &["Appearance", "Playback", "Audio", "Library", "Desktop", "Keys"];
+pub const SECTIONS: &[&str] = &["Appearance", "Playback", "Audio", "Library", "Desktop", "Updates", "Keys"];
 
 macro_rules! s {
     ($key:literal, $sec:literal, $label:literal, $help:literal, $kind:expr) => {
@@ -312,6 +318,14 @@ pub const SETTINGS: &[Setting] = &[
         "Also send songs heard on the radio (when the station names them).",
         Kind::Toggle
     ),
+    s!(
+        "update_check",
+        "Updates",
+        "Check for updates",
+        "Once a day when Musinator starts, ask GitHub whether a new version is out. Nothing else is sent.",
+        Kind::Toggle
+    ),
+    s!("update_now", "Updates", "Check now", "Look for a new version now and install it.", Kind::Open),
     s!("keys", "Keys", "Remap keys", "Change the key for any action.", Kind::Open),
 ];
 
@@ -367,6 +381,8 @@ impl Config {
             },
             "lastfm_radio" => on(self.lastfm_radio),
             "notifications" => on(self.notifications),
+            "update_check" => on(self.update_check),
+            "update_now" => format!("This is v{}", crate::update::current()),
             _ => String::new(),
         }
     }
@@ -401,6 +417,7 @@ impl Config {
             "podcast_auto_download" => &mut self.podcast_auto_download,
             "lastfm_radio" => &mut self.lastfm_radio,
             "notifications" => &mut self.notifications,
+            "update_check" => &mut self.update_check,
             _ => return None,
         })
     }

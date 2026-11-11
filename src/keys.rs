@@ -68,6 +68,7 @@ pub enum Action {
     Rate4,
     Rate5,
     RateClear,
+    Update,
     Quit,
 }
 
@@ -147,6 +148,7 @@ actions! {
     Back "back" "Move" "Back / close" ["esc", "backspace"];
     PaneShrink "pane_shrink" "Move" "Left pane narrower" ["<"];
     PaneGrow "pane_grow" "Move" "Left pane wider" [">"];
+    Update "update" "App" "Install an update" ["U"];
     Quit "quit" "App" "Quit" ["q", "ctrl+c"];
 }
 
