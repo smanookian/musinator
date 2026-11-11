@@ -317,18 +317,23 @@ impl PlayerInterface for Imp {
 }
 
 /// Desktop notification for a new track (off the UI thread). `art` is the cover
-/// JPEG; without it the notification daemon shows the app icon. Calling this again
-/// for the same song updates the open notification in place.
+/// JPEG, sent as the `image-path` hint: notification servers show that picture
+/// before the app icon (the Omarchy shell ignores a file path given as the app
+/// icon). Calling this again for the same song updates the open notification.
 pub fn notify(t: &Track, art: Option<&std::path::Path>) {
     let title = t.display_title().to_string();
     let body = if t.album.is_empty() { t.artist.clone() } else { format!("{} — {}", t.artist, t.album) };
-    let icon = art.map(|p| p.display().to_string()).unwrap_or_default();
+    let image = art.map(|p| format!("file://{}", p.display()));
     // Replace the previous song's notification instead of stacking a new one.
     static LAST: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     use std::sync::atomic::Ordering::Relaxed;
     std::thread::spawn(move || {
         let Ok(c) = mpris_server::zbus::blocking::Connection::session() else { return };
-        let hints: std::collections::HashMap<&str, mpris_server::zbus::zvariant::Value> = std::collections::HashMap::new();
+        let mut hints: std::collections::HashMap<&str, mpris_server::zbus::zvariant::Value> = std::collections::HashMap::new();
+        if let Some(img) = image {
+            hints.insert("image-path", img.into());
+        }
+        let icon = "musinator";
         let reply = c.call_method(
             Some("org.freedesktop.Notifications"),
             "/org/freedesktop/Notifications",

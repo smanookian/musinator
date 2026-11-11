@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.3
+
+### Fixed
+
+- Song notifications really show the album cover now, also in the Omarchy shell. It is sent as the notification's picture, not as its icon.
+
 ## 0.1.2
 
 ### New
