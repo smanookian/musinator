@@ -2,6 +2,8 @@
 
 Everything here is checkable. If a number changes, change it here too.
 
+**Paste as normal text.** The blocks below are ready to paste: one line per paragraph or list item. Don't use Reddit's code-block button, or it shows up in a grey monospace box.
+
 **Voice** (same as the Omarchy course, Superkey, Markinator and Lazynator posts on stevinator.com):
 - Open with "So here is the thing …" (or "So here is why …").
 - Short, plain sentences. First person. Say what was missing, then what it does.
@@ -40,12 +42,9 @@ Show HN: Musinator – a terminal music player with album art and synced lyrics
 **Text:**
 
 ```
-So here is the thing about music in the terminal. The players are fast, but most of them
-look like 1998.
+So here is the thing about music in the terminal. The players are fast, but most of them look like 1998.
 
-I live in the terminal on Omarchy (Arch + Hyprland), and I wanted my music there too. cmus
-is fast. ncmpcpp is powerful, but you set up MPD first. None of them showed me the album
-cover, the lyrics, or colors that match my desktop. So I built the player I wanted, in Rust.
+I live in the terminal on Omarchy (Arch + Hyprland), and I wanted my music there too. cmus is fast. ncmpcpp is powerful, but you set up MPD first. None of them showed me the album cover, the lyrics, or colors that match my desktop. So I built the player I wanted, in Rust.
 
 What it does:
 
@@ -54,23 +53,18 @@ What it does:
 - 22 themes that change live, or "match Omarchy", which follows your desktop theme.
 - Gapless in every format: FLAC, MP3, AAC, ALAC, Vorbis, Opus, WAV, AIFF.
 - Native PipeWire output at the file's own rate. If the system resamples, it says so.
-- Internet radio, podcasts with downloads and resume, and Navidrome / Jellyfin /
-  Subsonic servers, in the same screens and the same search.
+- Internet radio, podcasts with downloads and resume, and Navidrome / Jellyfin / Subsonic servers, in the same screens and the same search.
 - Tag editing with MusicBrainz, a 10-band EQ, mini mode, mouse, MPRIS, Last.fm.
 
 Near 0% CPU when idle. No account, no telemetry.
 
 What broke along the way, in case it helps someone building the same kind of thing:
 
-- Lyrics switched a little late. The sound needs about 40 ms from the program to your
-  ears; the lyric clock now counts in the PipeWire latency.
-- Album covers piled up in the terminal's memory while scrolling. Every new picture got a
-  new Kitty image id. Now each place on the screen reuses its id.
-- In tmux the first key press got lost. Musinator asked the terminal about pictures at
-  startup and tmux never answered. Now it does not ask terminals that cannot answer.
+- Lyrics switched a little late. The sound needs about 40 ms from the program to your ears; the lyric clock now counts in the PipeWire latency.
+- Album covers piled up in the terminal's memory while scrolling. Every new picture got a new Kitty image id. Now each place on the screen reuses its id.
+- In tmux the first key press got lost. Musinator asked the terminal about pictures at startup and tmux never answered. Now it does not ask terminals that cannot answer.
 
-Not there yet: Spotify (their API only allows remote control for small apps), an AUR
-package (an install script works), and anything besides Linux x86_64.
+Not there yet: Spotify (their API only allows remote control for small apps), an AUR package (an install script works), and anything besides Linux x86_64.
 
 MIT, 70 tests.
 curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.sh | sh
@@ -106,15 +100,13 @@ Post when you can answer for a few hours. One subreddit per day, not all at once
 Attach the GIF, then:
 
 ```
-So here is the thing. I wanted my music in the terminal, but with the album cover, the
-lyrics, and colors that match my Omarchy theme.
+So here is the thing. I wanted my music in the terminal, but with the album cover, the lyrics, and colors that match my Omarchy theme.
 
 So I built Musinator.
 
 - "Match Omarchy" theme: switch your Omarchy theme and Musinator follows right away
 - Album covers as real pictures in Ghostty
-- Media keys work, and it can show the song in the Omarchy bar (it backs up shell.json
-  first)
+- Media keys work, and it can show the song in the Omarchy bar (it backs up shell.json first)
 - Synced lyrics, full-screen with f
 - Internet radio, podcasts, and your Navidrome or Jellyfin servers
 - 10-band EQ, mini mode with m, tag editing with MusicBrainz
@@ -125,8 +117,7 @@ curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.s
 Page with screenshots: https://stevinator.com/apps/musinator
 How I built it: https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal
 
-Free, MIT. If a key feels wrong or something looks off on your machine, tell me. I would
-rather hear about it than not.
+Free, MIT. If a key feels wrong or something looks off on your machine, tell me. I would rather hear about it than not.
 
 I hope to see you next time. Steve out. Tschau!
 ```
@@ -144,8 +135,7 @@ So here is the setup.
 - App: Musinator, a terminal music player I wrote in Rust
 - Terminal: Ghostty (covers are Kitty graphics; other terminals get half-blocks)
 - WM: Hyprland via Omarchy
-- Themes: 22 built in, previewed live with t, or "match Omarchy", which follows your
-  Omarchy theme
+- Themes: 22 built in, previewed live with t, or "match Omarchy", which follows your Omarchy theme
 - Lyrics: synced from .lrc files, tags, or LRCLIB; full-screen with f
 - Also: radio, podcasts, Navidrome/Jellyfin, 10-band EQ, mini mode with m
 
@@ -159,21 +149,16 @@ I hope to see you next time. Steve out. Tschau!
 **Title:** `Musinator: a terminal music player in Rust with gapless playback, native PipeWire output and synced lyrics`
 
 ```
-So here is the thing. I wanted a terminal music player that is fast, gapless, and still
-shows the album cover and the lyrics. So I wrote one in Rust (ratatui, symphonia, native
-PipeWire).
+So here is the thing. I wanted a terminal music player that is fast, gapless, and still shows the album cover and the lyrics. So I wrote one in Rust (ratatui, symphonia, native PipeWire).
 
 Things that might interest you:
 
 - Gapless in every format: MP4 priming, Opus pre-skip and LAME padding are trimmed.
-- The audio thread never locks or allocates. The UI only redraws when something changes,
-  so idle CPU is near zero.
-- The lyric clock counts in the PipeWire output latency, so lines switch when you hear
-  them, not when they are decoded.
+- The audio thread never locks or allocates. The UI only redraws when something changes, so idle CPU is near zero.
+- The lyric clock counts in the PipeWire output latency, so lines switch when you hear them, not when they are decoded.
 - One source interface for local files, radio, podcasts and Subsonic/Jellyfin servers.
 
-To be honest, the hardest bug was a lost first key press in tmux: a startup query that
-tmux never answers. Now Musinator skips it there.
+To be honest, the hardest bug was a lost first key press in tmux: a startup query that tmux never answers. Now Musinator skips it there.
 
 70 tests, MIT: https://github.com/smanookian/musinator
 
@@ -189,8 +174,7 @@ Post 1 with the video (`musinator-demo.mp4`), then reply to yourself with 2–6.
 ```
 1/ So here is the thing about music in the terminal: fast, but it looks like 1998.
 
-So I built Musinator. Real album covers, lyrics in time with the song, 22 themes that
-switch live. Free and open source, for Omarchy and Linux.
+So I built Musinator. Real album covers, lyrics in time with the song, 22 themes that switch live. Free and open source, for Omarchy and Linux.
 
 [video]
 ```
@@ -198,8 +182,7 @@ switch live. Free and open source, for Omarchy and Linux.
 ```
 2/ Gapless in every format: FLAC, MP3, AAC, ALAC, Vorbis, Opus, WAV, AIFF.
 
-It plays at the file's own sample rate. If the sound system changes it, the info line
-says so.
+It plays at the file's own sample rate. If the sound system changes it, the info line says so.
 ```
 
 ```
@@ -209,13 +192,11 @@ f opens full-screen lyrics with the current line in big letters.
 ```
 
 ```
-4/ Not only your files: internet radio, podcasts with download and resume, and your
-Navidrome or Jellyfin servers. Same screens, same search.
+4/ Not only your files: internet radio, podcasts with download and resume, and your Navidrome or Jellyfin servers. Same screens, same search.
 ```
 
 ```
-5/ Near 0% CPU when idle. No account, no telemetry. It only goes online for the things
-you use.
+5/ Near 0% CPU when idle. No account, no telemetry. It only goes online for the things you use.
 ```
 
 ```
@@ -232,10 +213,7 @@ I hope to see you next time. Steve out. Tschau!
 ## Omarchy Discord (day 2)
 
 ```
-So here is a new one for Omarchy: Musinator, a terminal music player. It follows your
-Omarchy theme live, works with the media keys, can show the song in the bar, and shows
-album covers as real pictures in Ghostty. Also synced lyrics, radio, podcasts and
-Navidrome/Jellyfin.
+So here is a new one for Omarchy: Musinator, a terminal music player. It follows your Omarchy theme live, works with the media keys, can show the song in the bar, and shows album covers as real pictures in Ghostty. Also synced lyrics, radio, podcasts and Navidrome/Jellyfin.
 
 https://stevinator.com/apps/musinator (GIF on the page)
 
