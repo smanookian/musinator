@@ -285,6 +285,24 @@ I hope to see you next time. Steve out. Tschau!
 
 ---
 
+## Blog copies (dev.to, Medium, Substack)
+
+**dev.to:** https://dev.to/new → copy the whole of `docs/crosspost-devto.md` into the editor (it includes the title, tags, cover and canonical link in the top block). Preview, then Publish.
+
+**Medium:** https://medium.com/p/import → paste `https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal` → Import. Add at the end: "Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine." Topics: Rust, Linux, Open Source, Terminal, Music.
+
+**Substack** (a note, not the full post; attach the GIF):
+
+```
+So here is a new one. I built Musinator, a music player for the terminal that does not look like 1998: real album covers, lyrics in time with the song, 22 themes that switch live, plus radio, podcasts and your Navidrome or Jellyfin servers.
+
+Free and open source, for Omarchy and Linux. The whole story, including what broke along the way: https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal
+
+I hope to see you next time. Steve out. Tschau!
+```
+
+---
+
 ## Rules for posting
 
 - **Blog post first.** Publish the stevinator.com post, then link it from every post.
