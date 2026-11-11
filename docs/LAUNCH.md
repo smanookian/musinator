@@ -93,9 +93,9 @@ I hope to see you next time. Steve out. Tschau!
 
 ## Reddit
 
-Post when you can answer for a few hours. One subreddit per day, not all at once.
+Post when you can answer for a few hours. Spreading posts over days is only to keep your replies manageable; r/CLI has no rule against posting today.
 
-### r/omarchy (day 1)
+### r/omarchy (posted 2026-11-11)
 
 **Title:** `I built a terminal music player for Omarchy: covers, synced lyrics, and it follows your theme`
 
@@ -124,7 +124,7 @@ Free, MIT. If a key feels wrong or something looks off on your machine, tell me.
 I hope to see you next time. Steve out. Tschau!
 ```
 
-### r/unixporn (day 4)
+### r/unixporn (posted 2026-11-11)
 
 **Title:** `[OC] Musinator – a terminal music player with real album covers, synced lyrics and live theme switching (Omarchy, Ghostty)`
 
@@ -146,7 +146,7 @@ MIT: https://github.com/smanookian/musinator
 I hope to see you next time. Steve out. Tschau!
 ```
 
-### r/CLI (any day)
+### r/CLI (ready to post now)
 
 Rules (checked 2026-11-11): be kind, stay on topic (CLI/terminal), no spam, no NSFW. No AI or project-age rules. No post flairs.
 
@@ -191,6 +191,16 @@ Rules (checked 2026-11-11): *"Applications who just happen to be written in Rust
 - Lyric clock includes PipeWire output latency.
 - Most code written with an AI assistant, designed/reviewed/tested by you.
 - https://github.com/smanookian/musinator
+
+Draft comment for the weekly thread (a starting point; change it into your own words before posting, because of the AI rule above):
+
+```
+Musinator, a terminal music player: https://github.com/smanookian/musinator
+
+ratatui for the UI, symphonia for decoding, and native PipeWire output through pipewire-rs. The part I spent the most time on was sample-exact gapless playback: MP4 priming, Opus pre-skip and LAME padding all get trimmed, so albums play without a click between songs. The audio thread never locks or allocates, and the UI only redraws when something changes, so it idles near 0% CPU. The lyric clock adds the PipeWire output latency, so lines switch when you hear them.
+
+Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine.
+```
 
 A real r/rust post fits later only as a technical write-up (flair "🧠 educational"), e.g. "How I got sample-exact gapless playback in Rust", written by you.
 
@@ -261,4 +271,4 @@ I hope to see you next time. Steve out. Tschau!
   different, not what is worse.
 - **Post when you can stay for a few hours.** The first hour of comments brings the real bug
   reports; fix fast and say so in the thread.
-- **One place per day.** Reddit removes posts that look like spam across subreddits.
+- **Don't post the same text everywhere at once.** Reddit's spam filter flags identical posts across many subreddits in a short time. Two or three a day with different texts is fine.
