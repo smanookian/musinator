@@ -173,6 +173,10 @@ Linux x86_64 only, no Spotify. MIT: https://github.com/smanookian/musinator
 I hope to see you next time. Steve out. Tschau!
 ```
 
+### r/tui (crosspost of the r/CLI post)
+
+Rules (checked 2026-11-11): AI-assisted code needs the flair **"AI assisted"** (required). Max one post per week per project. Crosspost from r/CLI is fine; body text optional.
+
 ### r/commandline (not before 2026-11-23)
 
 Rules (checked 2026-11-11) that matter:
@@ -191,6 +195,8 @@ Rules (checked 2026-11-11): *"Applications who just happen to be written in Rust
 - Lyric clock includes PipeWire output latency.
 - Most code written with an AI assistant, designed/reviewed/tested by you.
 - https://github.com/smanookian/musinator
+
+Where: https://www.reddit.com/r/rust/comments/1xrooh0/whats_everyone_working_on_this_week_462026/ (week 46/2026; a new thread starts every Monday). Comment there, no own post, no flair.
 
 Draft comment for the weekly thread (a starting point; change it into your own words before posting, because of the AI rule above):
 
