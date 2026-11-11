@@ -31,10 +31,24 @@ Links:
 
 ## Status (2026-11-11)
 
-Places, rules and flairs for every launch: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.md`.
+Step-by-step process for next time: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.md`.
 
 | Place | Status |
 |---|---|
+| Blog post | ✓ posted |
+| r/omarchy | ✓ posted (flair: I Made a Thing) |
+| r/unixporn | ✓ posted (flair: Material) |
+| r/CLI | ✓ posted |
+| r/tui | ✓ crossposted (flair: AI assisted) |
+| r/rust weekly thread | ✓ commented |
+| Hacker News (Show HN) | ✓ posted |
+| X | ✓ posted |
+| Omarchy Discord | ✓ posted in #omarchy-apps |
+| dev.to, Medium, Substack | ✓ posted |
+| r/commandline | open: **on or after 2026-11-23**, written by you, flair Terminal User Interface |
+| Mastodon | not used |
+
+---|---|
 | Blog post | ✓ posted |
 | r/omarchy | ✓ posted (flair: I Made a Thing) |
 | r/unixporn | ✓ posted (flair: Material) |
