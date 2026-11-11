@@ -316,11 +316,13 @@ impl PlayerInterface for Imp {
     }
 }
 
-/// Desktop notification for a new track (off the UI thread).
-pub fn notify(t: &Track) {
+/// Desktop notification for a new track (off the UI thread). `art` is the cover
+/// JPEG; without it the notification daemon shows the app icon. Calling this again
+/// for the same song updates the open notification in place.
+pub fn notify(t: &Track, art: Option<&std::path::Path>) {
     let title = t.display_title().to_string();
     let body = if t.album.is_empty() { t.artist.clone() } else { format!("{} — {}", t.artist, t.album) };
-    let icon = t.art.as_ref().map(crate::app::art::cache_file).filter(|p| p.exists()).map(|p| p.display().to_string()).unwrap_or_default();
+    let icon = art.map(|p| p.display().to_string()).unwrap_or_default();
     // Replace the previous song's notification instead of stacking a new one.
     static LAST: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     use std::sync::atomic::Ordering::Relaxed;

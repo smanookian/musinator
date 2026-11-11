@@ -193,6 +193,8 @@ pub struct App {
     /// Songs whose tags were saved; refreshed in the queue after the next scan.
     edited: Vec<crate::model::TrackRef>,
     pub art_file: Option<std::path::PathBuf>,
+    /// Set when the song notification went out before its cover was ready.
+    notify_waits_art: Option<Instant>,
     pub lyrics: Option<(TrackRef, Lyrics)>,
     pub viz: viz::Viz,
     pub status: Option<(String, bool, Instant)>,
@@ -1361,8 +1363,13 @@ impl App {
                         self.worker.send(Job::Lyrics { track: r });
                     }
                     self.art_file = t.art.as_ref().map(art::cache_file).filter(|p| p.exists());
+                    self.notify_waits_art = None;
                     if self.cfg.notifications {
-                        crate::mpris::notify(t);
+                        crate::mpris::notify(t, self.art_file.as_deref());
+                        // The cover is still being extracted: show it as soon as it is ready.
+                        if self.art_file.is_none() && t.art.is_some() {
+                            self.notify_waits_art = Some(Instant::now());
+                        }
                     }
                 }
                 self.fill_queue_view();
@@ -1621,6 +1628,12 @@ impl App {
             if cur.as_ref() == Some(&a.art) && self.art_file.as_ref() != Some(&f) {
                 self.art_file = Some(f);
                 self.mpris_update();
+                // Update the song notification while it is still on screen (4 s).
+                if self.notify_waits_art.take().is_some_and(|t| t.elapsed() < Duration::from_secs(4))
+                    && let Some(t) = self.now().track
+                {
+                    crate::mpris::notify(&t, self.art_file.as_deref());
+                }
             }
         }
         self.dirty = true;
@@ -2013,6 +2026,7 @@ pub fn run(cfg: Config) -> Result<()> {
         pics: Vec::new(),
         grid_pics: Default::default(),
         art_file: None,
+        notify_waits_art: None,
         lyrics: None,
         viz: viz::Viz::new(),
         status: None,
