@@ -43,7 +43,7 @@ Places, rules and flairs for every launch: `~/Projects/Stevinator/docs/LAUNCH_PL
 | r/rust weekly thread | ✓ commented |
 | Hacker News (Show HN) | ✓ posted |
 | X | open: blocked as "automated" on first try; post 1 alone, then replies, without the curl line |
-| Omarchy Discord | open: https://discord.gg/tXFUdasqhY |
+| Omarchy Discord | open: #omarchy-apps on https://discord.gg/tXFUdasqhY |
 | r/commandline | open: **on or after 2026-11-23**, written by you |
 | Mastodon | not used |
 
@@ -273,7 +273,7 @@ I hope to see you next time. Steve out. Tschau!
 
 ## Omarchy Discord
 
-Invite: https://discord.gg/tXFUdasqhY. Post in the channel for sharing projects, not in announcements or support.
+Invite: https://discord.gg/tXFUdasqhY. Post in **#omarchy-apps** (server "Omacom"). Not #omarchy, announcements or help.
 
 ```
 So here is a new one for Omarchy: Musinator, a terminal music player. It follows your Omarchy theme live, works with the media keys, can show the song in the bar, and shows album covers as real pictures in Ghostty. Also synced lyrics, radio, podcasts and Navidrome/Jellyfin.
