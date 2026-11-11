@@ -1095,8 +1095,12 @@ impl Dialog {
                     }
                 };
                 let st = if matches!(state, UpdateState::Failed(_)) { Style::default().fg(c(t.error)).bg(c(t.dialog_bg)) } else { bold };
+                let n = status.len();
                 lines.extend(status.into_iter().map(|s| (s, st)));
-                let inner = frame(f, app, w, lines.len() as u16 + 3, "Update");
+                // Room for the longest message, so the window does not jump between states.
+                lines.extend((n..3).map(|_| (String::new(), text)));
+                // Lines, an empty row, then the key hints.
+                let inner = frame(f, app, w, lines.len() as u16 + 4, "Update");
                 let b = f.buffer_mut();
                 for (i, (l, s)) in lines.iter().enumerate() {
                     put(b, inner.x + 2, inner.y + 1 + i as u16, l, inner.width - 4, *s);
@@ -1542,9 +1546,16 @@ fn frame(f: &mut Frame, app: &App, w: u16, h: u16, title: &str) -> Rect {
         for (sx, sy, sw, sh) in [(r.x + 2, r.y + h, w, 1), (r.x + w, r.y + 1, 2, h)] {
             let sr = Rect { x: sx, y: sy, width: sw, height: sh }.intersection(area);
             buf.set_style(sr, Style::default().bg(c(t.shadow)).fg(c(t.muted.mix(t.shadow, 0.5))));
+            // A picture cell takes its image id from the text color: dimmed, it would draw garbage.
+            for p in sr.positions() {
+                if buf[p].symbol().contains(KITTY_CELL) {
+                    buf[p].set_symbol(" ");
+                }
+            }
         }
     }
     f.render_widget(Clear, r);
+    cut_pictures_right_of(f.buffer_mut(), r, if app.cfg.shadow { 2 } else { 0 });
     let kind = if app.cfg.corners == "square" { BorderType::Plain } else { BorderType::Rounded };
     let block = Block::default()
         .borders(Borders::ALL)
@@ -1558,6 +1569,26 @@ fn frame(f: &mut Frame, app: &App, w: u16, h: u16, title: &str) -> Rect {
     let inner = block.inner(r);
     f.render_widget(block, r);
     inner
+}
+
+/// Kitty picture cell (Unicode placeholder). Only the first cell of a picture row
+/// says which row and column it is; the cells after it count on from their left neighbour.
+const KITTY_CELL: char = '\u{10EEEE}';
+
+/// A dialog over a picture breaks that counting for the cells right of it, and the
+/// terminal would draw them as stripes. Blank them until the picture row ends.
+fn cut_pictures_right_of(buf: &mut ratatui::buffer::Buffer, r: Rect, shadow: u16) {
+    let area = buf.area;
+    for y in r.y..(r.y + r.height + shadow.min(1)).min(area.bottom()) {
+        for x in (r.x + r.width + shadow).min(area.right())..area.right() {
+            let cell = &mut buf[(x, y)];
+            // A cell with its own position marks (more than the bare placeholder) starts a new row.
+            if cell.symbol() != KITTY_CELL.to_string() {
+                break;
+            }
+            cell.reset();
+        }
+    }
 }
 
 fn hints_row(b: &mut ratatui::buffer::Buffer, inner: Rect, s: &str, st: Style) {
@@ -1917,4 +1948,28 @@ fn copy(s: &str) -> bool {
         .stdin(std::process::Stdio::piped())
         .spawn()
         .is_ok_and(|mut ch| ch.stdin.take().is_some_and(|mut i| i.write_all(s.as_bytes()).is_ok()) && ch.wait().is_ok_and(|s| s.success()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::buffer::Buffer;
+
+    #[test]
+    fn picture_cells_right_of_a_dialog_are_blanked_until_the_next_picture_row() {
+        let bare = KITTY_CELL.to_string();
+        let marked = format!("{KITTY_CELL}\u{305}\u{305}");
+        let mut b = Buffer::empty(Rect::new(0, 0, 12, 1));
+        for x in 0..12 {
+            b[(x, 0)].set_symbol(&bare);
+        }
+        b[(0, 0)].set_symbol(&marked);
+        b[(9, 0)].set_symbol(&marked); // another picture starts here
+        cut_pictures_right_of(&mut b, Rect::new(2, 0, 3, 1), 2);
+        let row: Vec<&str> = (0..12).map(|x| b[(x, 0)].symbol()).collect();
+        assert_eq!(row[1], bare, "left of the dialog stays");
+        assert!(row[7..9].iter().all(|s| *s == " "), "right of dialog and shadow is blanked: {row:?}");
+        assert_eq!(row[9], marked, "the next picture row is kept");
+        assert_eq!(row[10], bare);
+    }
 }

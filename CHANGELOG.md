@@ -2,6 +2,13 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.4
+
+### Fixed
+
+- The update window shows its last line again ("then your queue comes back") and keeps the same size while it installs.
+- Windows opened over album covers no longer leave striped lines next to them in Ghostty and Kitty.
+
 ## 0.1.3
 
 ### Fixed
