@@ -4,6 +4,8 @@ Everything here is checkable. If a number changes, change it here too.
 
 **Paste as normal text.** The blocks below are ready to paste: one line per paragraph or list item. Don't use Reddit's code-block button, or it shows up in a grey monospace box.
 
+**AI rules:** r/commandline, r/rust and Hacker News do not want AI-written post text. There, use these texts only as facts and write the post yourself, and say plainly that most of the code was written with an AI assistant.
+
 **Voice** (same as the Omarchy course, Superkey, Markinator and Lazynator posts on stevinator.com):
 - Open with "So here is the thing …" (or "So here is why …").
 - Short, plain sentences. First person. Say what was missing, then what it does.
@@ -144,26 +146,53 @@ MIT: https://github.com/smanookian/musinator
 I hope to see you next time. Steve out. Tschau!
 ```
 
-### r/commandline (day 5) and r/rust (day 6)
+### r/CLI (any day)
 
-**Title:** `Musinator: a terminal music player in Rust with gapless playback, native PipeWire output and synced lyrics`
+Rules (checked 2026-11-11): be kind, stay on topic (CLI/terminal), no spam, no NSFW. No AI or project-age rules. No post flairs.
+
+**Title:** `Musinator: a terminal music player in Rust with album covers, synced lyrics and gapless playback`
+
+Attach the GIF, then:
 
 ```
-So here is the thing. I wanted a terminal music player that is fast, gapless, and still shows the album cover and the lyrics. So I wrote one in Rust (ratatui, symphonia, native PipeWire).
+So here is the thing. I wanted a terminal music player that is fast and gapless, and still shows the album cover and the lyrics. So I wrote one in Rust (ratatui, symphonia, native PipeWire).
 
-Things that might interest you:
+- Real album covers in Ghostty/Kitty, half-block pictures in other terminals
+- Synced lyrics from .lrc files, tags, or LRCLIB; full-screen with f
+- Gapless in every format; plays at the file's own sample rate and says when the system resamples
+- Internet radio, podcasts, and Navidrome/Jellyfin servers in the same screens and search
+- 22 themes, 10-band EQ, mini mode, tag editing with MusicBrainz
+- Near 0% CPU when idle; a small command line too (musinator status, toggle, next)
 
-- Gapless in every format: MP4 priming, Opus pre-skip and LAME padding are trimmed.
-- The audio thread never locks or allocates. The UI only redraws when something changes, so idle CPU is near zero.
-- The lyric clock counts in the PipeWire output latency, so lines switch when you hear them, not when they are decoded.
-- One source interface for local files, radio, podcasts and Subsonic/Jellyfin servers.
+Similar programs: cmus (very fast, no covers or lyrics), ncmpcpp and rmpc (need MPD; rmpc shows covers), termusic (Rust, covers, podcasts), kew (local files). Musinator puts covers, synced lyrics, radio, podcasts and servers into one program without a daemon.
 
-To be honest, the hardest bug was a lost first key press in tmux: a startup query that tmux never answers. Now Musinator skips it there.
+Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine.
 
-70 tests, MIT: https://github.com/smanookian/musinator
+Linux x86_64 only, no Spotify. MIT: https://github.com/smanookian/musinator
 
 I hope to see you next time. Steve out. Tschau!
 ```
+
+### r/commandline (not before 2026-11-23)
+
+Rules (checked 2026-11-11) that matter:
+- **No projects newer than 30 days.** The repo was created 2026-10-24, so post on or after **2026-11-23**.
+- **AI Code Policy:** post text and titles written by AI are not allowed, so **write this post yourself** (use the r/CLI text above only as a list of facts). Projects with more than a small part of AI code must say so, e.g. "This software's code is partially AI-generated." Ours: say it plainly (see the sentence in the r/CLI text).
+- **List similar software and how yours is different** (required; facts in the r/CLI text).
+- Flair: **Terminal User Interface**.
+
+### r/rust (weekly thread only)
+
+Rules (checked 2026-11-11): *"Applications who just happen to be written in Rust are not on-topic"*; progress on Rust projects goes in the stickied **"What's Everyone Working on this Week?"** thread. *"Submissions appearing to contain AI-generated content may be removed."* So: **no own post**, a short comment in that thread, in your own words. Facts for it:
+
+- Terminal music player, ratatui + symphonia + native PipeWire (pipewire-rs).
+- Sample-exact gapless across formats (MP4 priming, Opus pre-skip, LAME padding trimmed).
+- Audio thread never locks or allocates; UI redraws only on change, near 0% idle CPU.
+- Lyric clock includes PipeWire output latency.
+- Most code written with an AI assistant, designed/reviewed/tested by you.
+- https://github.com/smanookian/musinator
+
+A real r/rust post fits later only as a technical write-up (flair "🧠 educational"), e.g. "How I got sample-exact gapless playback in Rust", written by you.
 
 ---
 
