@@ -240,6 +240,8 @@ pub struct App {
     pub mpris: Option<crate::mpris::Mpris>,
     preview_theme: Option<Theme>,
     kitty_ok: bool,
+    /// The terminal answered the picture query (its cell size is known).
+    answered: bool,
     art_tx: cb::Sender<ArtReady>,
 }
 
@@ -1198,7 +1200,8 @@ impl App {
                     _ => self.list().and_then(|v| Some((v.playlist_id()?, v.title.clone()))),
                 };
                 if let Some((id, name)) = pl {
-                    let path = format!("~/Music/Playlists/{name}.m3u8");
+                    let music = self.cfg.music_folders.first().cloned().unwrap_or_else(crate::config::default_music_dir);
+                    let path = format!("{}/Playlists/{name}.m3u8", music.trim_end_matches('/'));
                     self.dialog = Some(Dialog::input("Export playlist", "Save as", path, dialogs::InputFor::Export(id)));
                 }
             }
@@ -1827,7 +1830,7 @@ impl App {
     /// Re-create the art worker after the image setting changed.
     pub fn restart_images(&mut self) {
         let mut p = self.picker.clone();
-        let kitty = self.kitty_ok && self.cfg.images != "halfblocks";
+        let kitty = use_kitty(self.kitty_ok, self.answered, &self.cfg.images);
         p.set_protocol_type(if kitty { ProtocolType::Kitty } else { ProtocolType::Halfblocks });
         self.picker = p.clone();
         self.images_on = self.cfg.images != "off";
@@ -1998,12 +2001,11 @@ pub fn run(cfg: Config) -> Result<()> {
     let term = std::env::var("TERM").unwrap_or_default();
     let no_answer =
         std::env::var_os("TMUX").is_some() || term.starts_with("screen") || term.starts_with("tmux") || term == "linux" || term == "dumb";
-    let mut picker = if no_answer { Picker::halfblocks() } else { Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks()) };
+    let query = if no_answer { None } else { Picker::from_query_stdio().ok() };
+    let answered = query.is_some();
+    let mut picker = query.unwrap_or_else(Picker::halfblocks);
     let kitty_ok = picker.protocol_type() == ProtocolType::Kitty;
-    // Real images on Kitty/Ghostty, half-blocks everywhere else.
-    if !kitty_ok || cfg.images == "halfblocks" {
-        picker.set_protocol_type(ProtocolType::Halfblocks);
-    }
+    picker.set_protocol_type(if use_kitty(kitty_ok, answered, &cfg.images) { ProtocolType::Kitty } else { ProtocolType::Halfblocks });
     let (in_tx, in_rx) = cb::unbounded();
     std::thread::Builder::new().name("input".into()).spawn(move || {
         loop {
@@ -2103,6 +2105,7 @@ pub fn run(cfg: Config) -> Result<()> {
         ratings: Default::default(),
         term_colors: None,
         kitty_ok,
+        answered,
         art_tx: a_tx,
     };
     // Start on "Albums".
@@ -2181,6 +2184,16 @@ pub fn run(cfg: Config) -> Result<()> {
         anyhow::bail!("could not start the new version ({e}): start Musinator again");
     }
     Ok(())
+}
+
+/// Real pictures when the terminal says it speaks Kitty graphics (Auto), or when the
+/// user picked "Kitty images" and the terminal answered at all (some do not say so).
+fn use_kitty(detected: bool, answered: bool, setting: &str) -> bool {
+    match setting {
+        "kitty" => detected || answered,
+        "halfblocks" | "off" => false,
+        _ => detected,
+    }
 }
 
 fn engine_handle(e: &Engine) -> crate::mpris::EngineView {

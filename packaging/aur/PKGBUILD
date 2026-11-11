@@ -1,6 +1,6 @@
 # Maintainer: Stepan Manookian <jclstefan at yahoo dot de>
 pkgname=musinator-bin
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="A modern-looking terminal music player: gapless, ReplayGain, real album art, themes"
 arch=('x86_64')

@@ -37,7 +37,8 @@ musinator
 
 What happens:
 
-- Musinator scans `~/Music` in the background. The status bar shows
+- Musinator scans your music folder in the background: the one in
+  `~/.config/user-dirs.dirs` (for example `~/Musik` on a German system), else `~/Music`. The status bar shows
   `scanning 120/4000` while it works.
 - After the scan, it measures the loudness of songs without ReplayGain tags.
   The status bar shows `measuring loudness 40%`.
@@ -218,7 +219,7 @@ On a radio station, `L` adds it to Favorites. On a podcast, `L` subscribes.
 | `d` | remove a song from the playlist |
 | `d` on a playlist in the Library pane | delete the playlist (asks first) |
 
-Export suggests `~/Music/Playlists/<name>.m3u8`. You can change the path.
+Export suggests `Playlists/<name>.m3u8` in your first music folder. You can change the path.
 
 To import an `.m3u8` file, use **Settings → Library → Import playlist**. The
 playlist gets the file's name.
@@ -495,7 +496,7 @@ Changes apply at once and are saved.
 | Pane corners | Round | Round or Square pane corners. |
 | Dialog shadow | On | Soft shadow under floating windows. |
 | Match terminal colors | On | Gives the terminal the theme's background and text color while open. |
-| Album art | Auto | Auto: real pictures on Kitty/Ghostty, half-blocks elsewhere. Also Kitty images, Half-blocks, Off. |
+| Album art | Auto | Auto: real pictures on Kitty/Ghostty, half-blocks elsewhere. **Kitty images** uses real pictures even when the terminal does not report Kitty support. Also Half-blocks, Off. |
 | Albums as grid | Off | Show albums as a grid of covers. |
 | Visualizer | On | Spectrum from the real audio. |
 | Visualizer speed | 30 fps | 10 to 60 fps. Lower uses less CPU. |
@@ -526,7 +527,7 @@ Changes apply at once and are saved.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
-| Music folders | `~/Music` | Folders to scan. `a` add, `d` remove. |
+| Music folders | your music folder | Folders to scan. `a` add, `d` remove. |
 | Watch for changes | On | Scans again when files change. |
 | Measure loudness | On | Measures EBU R128 loudness for files without ReplayGain tags. |
 | Save lyrics next to songs | Off | Lyrics found online also go into an `.lrc` file next to the song. |

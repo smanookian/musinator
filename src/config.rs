@@ -81,7 +81,7 @@ impl Default for Config {
             notifications: false,
             seek_small: 5,
             seek_big: 30,
-            music_folders: vec!["~/Music".into()],
+            music_folders: vec![default_music_dir()],
             watch_folders: true,
             measure_loudness: true,
             save_lyrics_next: false,
@@ -115,6 +115,26 @@ pub fn cache_dir() -> PathBuf {
 
 pub fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// The music folder from `~/.config/user-dirs.dirs` (`~/Musik` on a German system),
+/// else `~/Music`. Written with `~/` when it is inside the home folder.
+pub fn default_music_dir() -> String {
+    let dirs = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".config")).join("user-dirs.dirs");
+    std::fs::read_to_string(dirs).ok().and_then(|s| music_dir_from(&s)).unwrap_or_else(|| "~/Music".into())
+}
+
+fn music_dir_from(user_dirs: &str) -> Option<String> {
+    let v = user_dirs.lines().find_map(|l| l.trim().strip_prefix("XDG_MUSIC_DIR="))?.trim().trim_matches('"');
+    let p = if let Some(rest) = v.strip_prefix("$HOME/") {
+        format!("~/{rest}")
+    } else if v.starts_with('/') {
+        v.to_string()
+    } else {
+        return None;
+    };
+    // "$HOME/" alone means the music folder is turned off: use the usual one.
+    (p != "~/").then_some(p)
 }
 
 pub fn expand(p: &str) -> PathBuf {
@@ -208,7 +228,7 @@ pub const SETTINGS: &[Setting] = &[
         "images",
         "Appearance",
         "Album art",
-        "Auto: real images on Kitty/Ghostty, half-blocks elsewhere.",
+        "Auto: real images on Kitty/Ghostty, half-blocks elsewhere. Kitty images: use them even if the terminal does not say it can.",
         Kind::Choice(&[("auto", "Auto"), ("kitty", "Kitty images"), ("halfblocks", "Half-blocks"), ("off", "Off")])
     ),
     s!("album_grid", "Appearance", "Albums as grid", "Show albums as a grid of covers.", Kind::Toggle),
@@ -489,6 +509,14 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn music_folder_follows_the_xdg_user_dirs() {
+        assert_eq!(music_dir_from("# comment\nXDG_MUSIC_DIR=\"$HOME/Musik\"\n").as_deref(), Some("~/Musik"));
+        assert_eq!(music_dir_from("XDG_MUSIC_DIR=\"/data/Music\"").as_deref(), Some("/data/Music"));
+        assert_eq!(music_dir_from("XDG_MUSIC_DIR=\"$HOME/\"").as_deref(), None, "turned off: keep ~/Music");
+        assert_eq!(music_dir_from("XDG_VIDEOS_DIR=\"$HOME/Videos\"").as_deref(), None);
     }
 
     #[test]

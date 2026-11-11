@@ -51,7 +51,7 @@ An AUR package (`musinator-bin`) is coming.
 
 **Updates:** at the first start Musinator asks whether it may check GitHub once a day. When a new version is out, press `U`: it shows what's new, installs it (checksum-verified) and restarts. Or run `musinator update`. See the [guide](docs/guide.md#updates).
 
-Then run `musinator`. It scans `~/Music` in the background. Add other folders in **Settings → Library**.
+Then run `musinator`. It scans your music folder (`~/Music`, or the one your system names, like `~/Musik`) in the background. Add other folders in **Settings → Library**.
 
 ## Screens
 

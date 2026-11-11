@@ -2,6 +2,14 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.5
+
+### Fixed
+
+- The first music folder is the one your system names (`~/Musik` on a German system, from `~/.config/user-dirs.dirs`), not always `~/Music`. Already set up? Add the folder in Settings → Library → Music folders.
+- Settings → Appearance → Album art → **Kitty images** now really uses pictures, even when the terminal does not report Kitty support.
+- Exported playlists are suggested in your first music folder.
+
 ## 0.1.4
 
 ### Fixed
