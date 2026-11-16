@@ -309,6 +309,40 @@ I hope to see you next time. Steve out. Tschau!
 
 ---
 
+## LinkedIn
+
+Story, not feature list. Video: `docs/demo/musinator-demo.mp4`. Links go in the first comment, not in the post.
+
+```
+So here is the thing about launching something: the real work starts after you press "post".
+
+Last week I released Musinator, a free music player for the terminal on Linux. Album covers, lyrics in time with the song, themes that follow your desktop. I built it because I wanted it myself.
+
+Then strangers started using it, and they found what I never would have:
+• A German user's music folder is called ~/Musik, not ~/Music. Musinator didn't find it.
+• Someone runs it inside tmux on a media PC. No covers there.
+• KDE's terminal can't show the pictures at all, because of a missing feature on their side.
+
+Five updates in one week, most of them a few hours after the report. I also added an updater inside the app, so people get each fix with one key instead of reinstalling.
+
+Not everything went well. Hacker News flagged my post, and one big Linux forum mostly wanted to argue about my operating system. That's part of it too.
+
+What I take from it: ship small, listen closely, fix fast. A bug report from a stranger is a gift.
+
+I designed and tested Musinator myself; most of the code was written with an AI coding assistant.
+
+I hope to see you next time. Steve out. Tschau!
+```
+
+First comment:
+
+```
+Musinator (free, open source): https://github.com/smanookian/musinator
+How I built it: https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal
+```
+
+---
+
 ## Rules for posting
 
 - **Blog post first.** Publish the stevinator.com post, then link it from every post.
