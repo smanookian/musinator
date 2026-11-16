@@ -689,8 +689,7 @@ fn visualizer(buf: &mut Buffer, app: &mut App, r: Rect) {
     let n = viz_bars(r);
     let t = &app.theme;
     const EIGHTHS: [&str; 9] = [" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
-    for i in 0..n.min(app.viz.bars.len()) {
-        let v = app.viz.bars[i];
+    for (i, &v) in app.viz.bars.iter().enumerate().take(n) {
         let p = i as f64 / (n.max(2) - 1) as f64;
         let col = if p < 0.5 { t.viz[0].mix(t.viz[1], p * 2.0) } else { t.viz[1].mix(t.viz[2], (p - 0.5) * 2.0) };
         let total = (v * r.height as f32 * 8.0).round() as u16;
