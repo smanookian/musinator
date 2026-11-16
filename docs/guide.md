@@ -883,8 +883,10 @@ If it still resamples, another app is playing at another rate.
 It needs: same rate, volume 100%, no ReplayGain, EQ off.
 
 **Covers look blocky**
-Real pictures need Kitty or Ghostty. Inside tmux or screen, Musinator always
-uses half-blocks.
+Real pictures need Kitty or Ghostty. Inside tmux they work too when tmux runs in
+Kitty or Ghostty (Musinator turns on tmux's `allow-passthrough` for its pane).
+Inside screen, Musinator uses half-blocks. The terminal is checked when Musinator
+starts: after reattaching from another terminal, restart it.
 
 **"This stream can't seek"**
 Radio can't seek.

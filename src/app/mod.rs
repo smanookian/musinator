@@ -1996,11 +1996,16 @@ pub fn run(cfg: Config) -> Result<()> {
     // Terminal.
     let mut terminal = ratatui::init();
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
-    // Asking the terminal about pictures: tmux/screen and the Linux console don't
-    // answer, and the waiting reader would then swallow the first key press.
+    // Asking the terminal about pictures: screen and the Linux console don't answer,
+    // and the waiting reader would then swallow the first key press. Inside tmux the
+    // question is passed on to the outer terminal (the picture library turns on tmux
+    // passthrough), so ask when that terminal is one that answers: Kitty or Ghostty.
     let term = std::env::var("TERM").unwrap_or_default();
-    let no_answer =
-        std::env::var_os("TMUX").is_some() || term.starts_with("screen") || term.starts_with("tmux") || term == "linux" || term == "dumb";
+    let no_answer = if std::env::var_os("TMUX").is_some() {
+        !tmux_outer_speaks_kitty()
+    } else {
+        term.starts_with("screen") || term.starts_with("tmux") || term == "linux" || term == "dumb"
+    };
     let query = if no_answer { None } else { Picker::from_query_stdio().ok() };
     let answered = query.is_some();
     let mut picker = query.unwrap_or_else(Picker::halfblocks);
@@ -2184,6 +2189,16 @@ pub fn run(cfg: Config) -> Result<()> {
         anyhow::bail!("could not start the new version ({e}): start Musinator again");
     }
     Ok(())
+}
+
+/// Inside tmux: is the terminal this client sits in Kitty or Ghostty?
+fn tmux_outer_speaks_kitty() -> bool {
+    std::process::Command::new("tmux")
+        .args(["display-message", "-p", "#{client_termname}"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .is_ok_and(|o| matches!(String::from_utf8_lossy(&o.stdout).trim(), "xterm-kitty" | "xterm-ghostty"))
 }
 
 /// Real pictures when the terminal says it speaks Kitty graphics (Auto), or when the

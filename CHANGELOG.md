@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.6
+
+### Fixed
+
+- Real album covers inside tmux, when tmux runs in Kitty or Ghostty. Before, tmux always got half-blocks.
+
 ## 0.1.5
 
 ### Fixed
