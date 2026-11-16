@@ -42,7 +42,7 @@ Step-by-step process for next time: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.
 | r/tui | ✓ crossposted (flair: AI assisted) |
 | r/rust weekly thread | ✓ commented |
 | Hacker News (Show HN) | ✓ posted |
-| X | ✓ posted |
+| X | open: web posting blocked ("looks automated"); try the phone app or another browser |
 | Omarchy Discord | ✓ posted in #omarchy-apps |
 | dev.to, Medium, Substack | ✓ posted |
 | LinkedIn | open: story post in "LinkedIn" below, links in the first comment |
