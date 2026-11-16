@@ -45,20 +45,8 @@ Step-by-step process for next time: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.
 | X | ✓ posted |
 | Omarchy Discord | ✓ posted in #omarchy-apps |
 | dev.to, Medium, Substack | ✓ posted |
+| LinkedIn | open: story post in "LinkedIn" below, links in the first comment |
 | r/commandline | open: **on or after 2026-11-23**, written by you, flair Terminal User Interface |
-| Mastodon | not used |
-
----|---|
-| Blog post | ✓ posted |
-| r/omarchy | ✓ posted (flair: I Made a Thing) |
-| r/unixporn | ✓ posted (flair: Material) |
-| r/CLI | ✓ posted |
-| r/tui | ✓ crossposted (flair: AI assisted) |
-| r/rust weekly thread | ✓ commented |
-| Hacker News (Show HN) | ✓ posted |
-| X | open: blocked as "automated" on first try; post 1 alone, then replies, without the curl line |
-| Omarchy Discord | open: #omarchy-apps on https://discord.gg/tXFUdasqhY |
-| r/commandline | open: **on or after 2026-11-23**, written by you |
 | Mastodon | not used |
 
 ---
