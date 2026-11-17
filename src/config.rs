@@ -228,7 +228,7 @@ pub const SETTINGS: &[Setting] = &[
         "images",
         "Appearance",
         "Album art",
-        "Auto: real images on Kitty/Ghostty, half-blocks elsewhere. Kitty images: use them even if the terminal does not say it can.",
+        "Auto: real images on Kitty/Ghostty, half-blocks elsewhere. Kitty images: use them even if the terminal does not say it can (Konsole; in tmux, restart Musinator after choosing it).",
         Kind::Choice(&[("auto", "Auto"), ("kitty", "Kitty images"), ("halfblocks", "Half-blocks"), ("off", "Off")])
     ),
     s!("album_grid", "Appearance", "Albums as grid", "Show albums as a grid of covers.", Kind::Toggle),

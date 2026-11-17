@@ -2001,10 +2001,15 @@ pub fn run(cfg: Config) -> Result<()> {
     // question is passed on to the outer terminal (the picture library turns on tmux
     // passthrough), so ask when that terminal is one that answers: Kitty or Ghostty.
     let term = std::env::var("TERM").unwrap_or_default();
-    let no_answer = if std::env::var_os("TMUX").is_some() {
+    let no_answer = if term == "linux" || term == "dumb" {
+        true
+    } else if cfg.images == "kitty" {
+        // Chosen by the user ("Kitty images"): ask in tmux too, whatever the outer terminal.
+        false
+    } else if std::env::var_os("TMUX").is_some() {
         !tmux_outer_speaks_kitty()
     } else {
-        term.starts_with("screen") || term.starts_with("tmux") || term == "linux" || term == "dumb"
+        term.starts_with("screen") || term.starts_with("tmux")
     };
     let query = if no_answer { None } else { Picker::from_query_stdio().ok() };
     let answered = query.is_some();

@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.7
+
+### Fixed
+
+- **Kitty images** (Settings → Appearance → Album art) now also works inside tmux, whatever terminal tmux runs in, for example Konsole. Restart Musinator after choosing it.
+
 ## 0.1.6
 
 ### Fixed

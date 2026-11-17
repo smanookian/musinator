@@ -496,7 +496,7 @@ Changes apply at once and are saved.
 | Pane corners | Round | Round or Square pane corners. |
 | Dialog shadow | On | Soft shadow under floating windows. |
 | Match terminal colors | On | Gives the terminal the theme's background and text color while open. |
-| Album art | Auto | Auto: real pictures on Kitty/Ghostty, half-blocks elsewhere. **Kitty images** uses real pictures even when the terminal does not report Kitty support. Also Half-blocks, Off. |
+| Album art | Auto | Auto: real pictures on Kitty/Ghostty, half-blocks elsewhere. **Kitty images** uses real pictures even when the terminal does not report Kitty support (for example Konsole, also inside tmux; in tmux restart Musinator after choosing it). Also Half-blocks, Off. |
 | Albums as grid | Off | Show albums as a grid of covers. |
 | Visualizer | On | Spectrum from the real audio. |
 | Visualizer speed | 30 fps | 10 to 60 fps. Lower uses less CPU. |
@@ -885,6 +885,7 @@ It needs: same rate, volume 100%, no ReplayGain, EQ off.
 **Covers look blocky**
 Real pictures need Kitty or Ghostty. Inside tmux they work too when tmux runs in
 Kitty or Ghostty (Musinator turns on tmux's `allow-passthrough` for its pane).
+In tmux inside another terminal (for example Konsole), choose **Appearance → Album art → Kitty images** and restart Musinator.
 Inside screen, Musinator uses half-blocks. The terminal is checked when Musinator
 starts: after reattaching from another terminal, restart it.
 
