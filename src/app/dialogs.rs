@@ -1202,13 +1202,16 @@ impl Dialog {
                             let mw = msg.width() as u16;
                             put_right(b, fx + fw - 1, y, msg, mw, Style::default().fg(c(if ok { t.good } else { t.warn })).bg(c(bg)));
                             let room = fw.saturating_sub(mw + 3) as usize;
-                            let shown = if sel { with_cursor(&e.cover, e.cur, room) } else { tail(&e.cover, room) };
-                            put(b, fx + 1, y, &shown, room as u16 + 1, st);
+                            if sel {
+                                field_with_cursor(b, fx + 1, y, &e.cover, e.cur, room, st);
+                            } else {
+                                put(b, fx + 1, y, &tail(&e.cover, room), room as u16 + 1, st);
+                            }
                         }
                     } else if e.values[i].is_empty() && e.mixed[i] && !e.touched[i] {
                         put(b, fx + 1, y, &format!("{cursor}(mixed)"), fw.saturating_sub(1), dim);
                     } else if sel {
-                        put(b, fx + 1, y, &with_cursor(&e.values[i], e.cur, fw as usize - 2), fw.saturating_sub(1), st);
+                        field_with_cursor(b, fx + 1, y, &e.values[i], e.cur, fw as usize - 2, st);
                     } else {
                         put(b, fx + 1, y, &e.values[i], fw.saturating_sub(2), st);
                     }
@@ -1586,16 +1589,31 @@ fn edit_at(s: &mut String, cur: &mut Option<usize>, k: &KeyEvent) -> bool {
     changed
 }
 
-/// `s` with a "▏" cursor at `cur` (None: at the end), cut to `w` columns around the cursor.
-fn with_cursor(s: &str, cur: Option<usize>, w: usize) -> String {
-    let mut chars: Vec<char> = s.chars().collect();
+/// Draw `s` in `w` columns at (x, y) with a text cursor at `cur` (None: at the end).
+/// The character under the cursor is shown in reverse; at the end a thin bar follows the text.
+fn field_with_cursor(b: &mut ratatui::buffer::Buffer, x: u16, y: u16, s: &str, cur: Option<usize>, w: usize, st: Style) {
+    use unicode_width::UnicodeWidthChar;
+    let chars: Vec<char> = s.chars().collect();
     let at = cur.unwrap_or(chars.len()).min(chars.len());
-    chars.insert(at, '▏');
-    if chars.len() <= w {
-        return chars.into_iter().collect();
+    // Scroll so the cursor (plus the bar at the end) stays inside the field.
+    let mut start = 0;
+    while start < at && chars[start..=at.min(chars.len() - 1)].iter().map(|c| c.width().unwrap_or(0)).sum::<usize>() + 1 > w {
+        start += 1;
     }
-    let start = (at + 1).saturating_sub(w).min(chars.len() - w);
-    chars[start..start + w].iter().collect()
+    let shown: String = chars[start..].iter().collect();
+    put(b, x, y, &shown, w as u16, st);
+    let col: usize = chars[start..at].iter().map(|c| c.width().unwrap_or(0)).sum();
+    let cx = x + col as u16;
+    if col >= w {
+        return;
+    }
+    if at < chars.len() {
+        let cell = &mut b[(cx, y)];
+        let (fg, bg) = (st.fg, st.bg);
+        cell.set_style(Style::default().fg(bg.unwrap_or(ratatui::style::Color::Black)).bg(fg.unwrap_or(ratatui::style::Color::White)));
+    } else {
+        put(b, cx, y, "▏", 1, st);
+    }
 }
 
 fn tail(s: &str, w: usize) -> String {
@@ -2057,7 +2075,10 @@ mod tests {
         assert_eq!(cur, Some(2));
         edit_at(&mut s, &mut cur, &key(KeyCode::End));
         assert_eq!(cur, None, "at the end");
-        assert_eq!(with_cursor("abc", Some(1), 10), "a▏bc");
+        let mut b = Buffer::empty(Rect::new(0, 0, 10, 1));
+        field_with_cursor(&mut b, 0, 0, "abc", Some(1), 10, Style::default());
+        let row: String = (0..3).map(|x| b[(x, 0)].symbol()).collect();
+        assert_eq!(row, "abc", "the cursor does not push the text apart");
     }
 
     #[test]

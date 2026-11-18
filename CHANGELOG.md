@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.10
+
+### Fixed
+
+- Tag editor: the cursor no longer pushes the text apart (it showed as a gap). The letter under the cursor is highlighted instead.
+
 ## 0.1.9
 
 ### Fixed
