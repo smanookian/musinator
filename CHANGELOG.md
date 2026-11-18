@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.8
+
+### New
+
+- Konsole 26.08 and newer get real album covers by themselves. Older Konsole: choose Settings → Appearance → Album art → Kitty images.
+
 ## 0.1.7
 
 ### Fixed

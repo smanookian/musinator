@@ -2014,7 +2014,9 @@ pub fn run(cfg: Config) -> Result<()> {
     let query = if no_answer { None } else { Picker::from_query_stdio().ok() };
     let answered = query.is_some();
     let mut picker = query.unwrap_or_else(Picker::halfblocks);
-    let kitty_ok = picker.protocol_type() == ProtocolType::Kitty;
+    // Konsole draws Kitty pictures but does not say so when asked; 26.08 is tested.
+    let konsole = std::env::var_os("TMUX").is_none() && konsole_draws_kitty(std::env::var("KONSOLE_VERSION").ok().as_deref());
+    let kitty_ok = picker.protocol_type() == ProtocolType::Kitty || (answered && konsole);
     picker.set_protocol_type(if use_kitty(kitty_ok, answered, &cfg.images) { ProtocolType::Kitty } else { ProtocolType::Halfblocks });
     let (in_tx, in_rx) = cb::unbounded();
     std::thread::Builder::new().name("input".into()).spawn(move || {
@@ -2196,6 +2198,11 @@ pub fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
+/// Konsole 26.08 (KONSOLE_VERSION 260800) and newer draw Kitty pictures, tested by a user.
+fn konsole_draws_kitty(version: Option<&str>) -> bool {
+    version.and_then(|v| v.trim().parse::<u32>().ok()).is_some_and(|v| v >= 260800)
+}
+
 /// Inside tmux: is the terminal this client sits in Kitty or Ghostty?
 fn tmux_outer_speaks_kitty() -> bool {
     std::process::Command::new("tmux")
@@ -2272,6 +2279,15 @@ mod plain_tests {
     fn drops_os_error_codes() {
         assert_eq!(super::plain("can't open x: No such file or directory (os error 2)"), "can't open x: No such file or directory");
         assert_eq!(super::plain("fine"), "fine");
+    }
+
+    #[test]
+    fn konsole_gets_pictures_from_26_08() {
+        assert!(super::konsole_draws_kitty(Some("260803")));
+        assert!(super::konsole_draws_kitty(Some("260800")));
+        assert!(!super::konsole_draws_kitty(Some("260400")));
+        assert!(!super::konsole_draws_kitty(None));
+        assert!(!super::konsole_draws_kitty(Some("")));
     }
 }
 

@@ -883,7 +883,7 @@ If it still resamples, another app is playing at another rate.
 It needs: same rate, volume 100%, no ReplayGain, EQ off.
 
 **Covers look blocky**
-Real pictures need Kitty or Ghostty. Inside tmux they work too when tmux runs in
+Real pictures need Kitty, Ghostty or Konsole 26.08 and newer. Inside tmux they work too when tmux runs in
 Kitty or Ghostty (Musinator turns on tmux's `allow-passthrough` for its pane).
 In tmux inside another terminal (for example Konsole), choose **Appearance → Album art → Kitty images** and restart Musinator.
 Inside screen, Musinator uses half-blocks. The terminal is checked when Musinator
