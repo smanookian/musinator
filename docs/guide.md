@@ -234,6 +234,8 @@ songs at once, only Artist, Album, Album artist, Year and Genre are shown.
 
 | Key | What it does |
 |-----|--------------|
+| `←` / `→`, `home` / `end` | move the cursor in the field; typing, `backspace` and `delete` work where it is |
+| `ctrl+u` / `ctrl+w` | clear the field / remove the word before the cursor |
 | `ctrl+f` | fill tags from the file and folder name |
 | `ctrl+b` | look the album up on MusicBrainz, then pick the release |
 | `ctrl+x` | remove the cover (on the Cover row) |

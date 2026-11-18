@@ -151,6 +151,8 @@ pub struct TagEdit {
     values: Fields,
     touched: [bool; 8],
     row: usize,
+    /// Text cursor in the selected field, in characters (None: at the end).
+    cur: Option<usize>,
     note: Option<String>,
     /// What the songs have now, e.g. "600×600 JPEG inside the song".
     cover_now: String,
@@ -305,6 +307,7 @@ impl Dialog {
             mixed,
             touched: [false; 8],
             row: 0,
+            cur: None,
             note: None,
             cover_now,
             folder_cover: info.folder_cover,
@@ -926,8 +929,10 @@ impl Dialog {
                 }
                 if down {
                     e.row = (e.row + 1) % rows.len();
+                    e.cur = None;
                 } else if up {
                     e.row = (e.row + rows.len() - 1) % rows.len();
+                    e.cur = None;
                 } else if k.code == KeyCode::Enter {
                     let cover = if e.cover_remove {
                         CoverJob::Remove
@@ -985,7 +990,7 @@ impl Dialog {
                 } else {
                     let i = rows[e.row];
                     let v = if i == COVER_ROW { &mut e.cover } else { &mut e.values[i] };
-                    if edit(v, &k) {
+                    if edit_at(v, &mut e.cur, &k) {
                         if i == COVER_ROW {
                             e.cover_remove = false;
                             e.cover_data = None;
@@ -1197,12 +1202,13 @@ impl Dialog {
                             let mw = msg.width() as u16;
                             put_right(b, fx + fw - 1, y, msg, mw, Style::default().fg(c(if ok { t.good } else { t.warn })).bg(c(bg)));
                             let room = fw.saturating_sub(mw + 3) as usize;
-                            put(b, fx + 1, y, &format!("{}{cursor}", tail(&e.cover, room)), room as u16 + 1, st);
+                            let shown = if sel { with_cursor(&e.cover, e.cur, room) } else { tail(&e.cover, room) };
+                            put(b, fx + 1, y, &shown, room as u16 + 1, st);
                         }
                     } else if e.values[i].is_empty() && e.mixed[i] && !e.touched[i] {
                         put(b, fx + 1, y, &format!("{cursor}(mixed)"), fw.saturating_sub(1), dim);
                     } else if sel {
-                        put(b, fx + 1, y, &format!("{}▏", tail(&e.values[i], fw as usize - 2)), fw.saturating_sub(1), st);
+                        put(b, fx + 1, y, &with_cursor(&e.values[i], e.cur, fw as usize - 2), fw.saturating_sub(1), st);
                     } else {
                         put(b, fx + 1, y, &e.values[i], fw.saturating_sub(2), st);
                     }
@@ -1212,7 +1218,7 @@ impl Dialog {
                     if on_cover {
                         "type a picture path (~ ok) · ctrl+x remove · enter save · esc cancel".into()
                     } else {
-                        "enter save · ctrl+f from file name · ctrl+b MusicBrainz · esc cancel".into()
+                        "←/→ move · enter save · ctrl+f from file name · ctrl+b MusicBrainz · esc cancel".into()
                     }
                 });
                 hints_row(b, inner, &hint, muted);
@@ -1513,6 +1519,83 @@ fn edit(s: &mut String, k: &KeyEvent) -> bool {
         KeyCode::Backspace => s.pop().is_some(),
         _ => false,
     }
+}
+
+/// Edit `s` at a cursor (`None` = at the end): typing inserts, ←/→/home/end move,
+/// backspace and delete remove, ctrl+u clears, ctrl+w removes the word before the cursor.
+/// True when the text changed (moving the cursor alone does not count).
+fn edit_at(s: &mut String, cur: &mut Option<usize>, k: &KeyEvent) -> bool {
+    let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+    let mut chars: Vec<char> = s.chars().collect();
+    let n = chars.len();
+    let mut at = cur.unwrap_or(n).min(n);
+    let changed = match k.code {
+        KeyCode::Left => {
+            at = at.saturating_sub(1);
+            false
+        }
+        KeyCode::Right => {
+            at = (at + 1).min(n);
+            false
+        }
+        KeyCode::Home => {
+            at = 0;
+            false
+        }
+        KeyCode::End => {
+            at = n;
+            false
+        }
+        KeyCode::Char('u') if ctrl => {
+            chars.clear();
+            at = 0;
+            true
+        }
+        KeyCode::Char('w') if ctrl => {
+            let mut i = at;
+            while i > 0 && chars[i - 1] == ' ' {
+                i -= 1;
+            }
+            while i > 0 && chars[i - 1] != ' ' {
+                i -= 1;
+            }
+            chars.drain(i..at);
+            at = i;
+            true
+        }
+        KeyCode::Char(ch) if !ctrl => {
+            chars.insert(at, ch);
+            at += 1;
+            true
+        }
+        KeyCode::Backspace if at > 0 => {
+            chars.remove(at - 1);
+            at -= 1;
+            true
+        }
+        KeyCode::Delete if at < n => {
+            chars.remove(at);
+            true
+        }
+        _ => return false,
+    };
+    *cur = (at < chars.len()).then_some(at);
+    if changed {
+        *s = chars.into_iter().collect();
+    }
+    changed
+}
+
+/// `s` with a "▏" cursor at `cur` (None: at the end), cut to `w` columns around the cursor.
+fn with_cursor(s: &str, cur: Option<usize>, w: usize) -> String {
+    let mut chars: Vec<char> = s.chars().collect();
+    let at = cur.unwrap_or(chars.len()).min(chars.len());
+    chars.insert(at, '▏');
+    if chars.len() <= w {
+        return chars.into_iter().collect();
+    }
+    let start = (at + 1).saturating_sub(w).min(chars.len() - w);
+    chars[start..start + w].iter().collect()
 }
 
 fn tail(s: &str, w: usize) -> String {
@@ -1954,6 +2037,28 @@ fn copy(s: &str) -> bool {
 mod tests {
     use super::*;
     use ratatui::buffer::Buffer;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn a_field_is_edited_where_the_cursor_is() {
+        let mut s = "Hihgway to Hell".to_string();
+        let mut cur = None;
+        for k in [KeyCode::Home, KeyCode::Right, KeyCode::Right, KeyCode::Delete, KeyCode::Right] {
+            edit_at(&mut s, &mut cur, &key(k));
+        }
+        assert!(edit_at(&mut s, &mut cur, &key(KeyCode::Char('h'))));
+        assert_eq!(s, "Highway to Hell");
+        assert!(!edit_at(&mut s, &mut cur, &key(KeyCode::Left)), "moving is not a change");
+        assert!(edit_at(&mut s, &mut cur, &key(KeyCode::Backspace)));
+        assert_eq!(s, "Hihway to Hell");
+        assert_eq!(cur, Some(2));
+        edit_at(&mut s, &mut cur, &key(KeyCode::End));
+        assert_eq!(cur, None, "at the end");
+        assert_eq!(with_cursor("abc", Some(1), 10), "a▏bc");
+    }
 
     #[test]
     fn picture_cells_right_of_a_dialog_are_blanked_until_the_next_picture_row() {

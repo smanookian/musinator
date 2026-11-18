@@ -2,6 +2,12 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.9
+
+### Fixed
+
+- Tag editor (`e`): fields have a real cursor now. `←`/`→`, `home`/`end` move it; typing, `backspace` and `delete` work where it is. Before, you could only add or remove at the end.
+
 ## 0.1.8
 
 ### New
