@@ -2,6 +2,17 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.11
+
+### New
+
+- Tag editor: `ctrl+c` copies the album tags (Album, Album artist, Year, Genre) and the cover; `ctrl+v` pastes them into another song or album. Check, then `enter` saves.
+- The album grid stretches its covers to fill the whole width.
+
+### Fixed
+
+- A changed Year is really saved in MP3s that also carry a recording date (players showed the old year before).
+
 ## 0.1.10
 
 ### Fixed

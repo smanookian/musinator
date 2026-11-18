@@ -236,6 +236,8 @@ songs at once, only Artist, Album, Album artist, Year and Genre are shown.
 |-----|--------------|
 | `←` / `→`, `home` / `end` | move the cursor in the field; typing, `backspace` and `delete` work where it is |
 | `ctrl+u` / `ctrl+w` | clear the field / remove the word before the cursor |
+| `ctrl+c` | copy the album tags (Album, Album artist, Year, Genre) and the cover |
+| `ctrl+v` | paste them into this song or album (empty copied fields are skipped); `enter` saves |
 | `ctrl+f` | fill tags from the file and folder name |
 | `ctrl+b` | look the album up on MusicBrainz, then pick the release |
 | `ctrl+x` | remove the cover (on the Cover row) |

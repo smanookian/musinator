@@ -199,7 +199,15 @@ pub fn write(path: &Path, fields: &[Option<String>; 8], cover: &CoverEdit) -> Re
                 1 => set(t, ItemKey::TrackArtist, v),
                 2 => set(t, ItemKey::AlbumTitle, v),
                 3 => set(t, ItemKey::AlbumArtist, v),
-                4 => set(t, ItemKey::Year, v),
+                // Players read the recording date (ID3v2.4 TDRC, Vorbis DATE) before the
+                // year field, so both are written; otherwise an old date wins.
+                4 => {
+                    set(t, ItemKey::Year, v);
+                    match v.parse::<u16>() {
+                        Ok(year) => t.set_date(lofty::tag::items::Timestamp { year, ..Default::default() }),
+                        Err(_) => t.remove_date(),
+                    }
+                }
                 5 => match v.parse::<u32>() {
                     Ok(n) => t.set_track(n),
                     Err(_) => t.remove_track(),

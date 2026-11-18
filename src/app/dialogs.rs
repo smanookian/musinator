@@ -131,6 +131,18 @@ pub enum Dialog {
     },
 }
 
+/// Album tags copied in the tag editor (ctrl+c), pasted into another song (ctrl+v).
+pub struct TagClip {
+    /// Album, Album artist, Year, Genre (by field index).
+    fields: Vec<(usize, String)>,
+    cover: Option<Vec<u8>>,
+    /// The album's name, for the messages.
+    from: String,
+}
+
+/// The fields ctrl+c copies: Album, Album artist, Year, Genre.
+const CLIP_FIELDS: [usize; 4] = [2, 3, 4, 7];
+
 pub enum UpdateState {
     Ready,
     Installing,
@@ -186,6 +198,22 @@ impl TagEdit {
             }
         }
         out
+    }
+    /// The album fields as they are now, and the cover this edit would end up with
+    /// (a picked or typed one, else the one inside the first song, else the folder's).
+    fn clip(&self) -> TagClip {
+        let cover = if self.cover_remove {
+            None
+        } else if let Some((b, _)) = &self.cover_data {
+            Some(b.clone())
+        } else if let Some(p) = self.cover_path() {
+            tagedit::load_cover(&p).ok()
+        } else {
+            crate::library::tags::embedded_art(&self.paths[0])
+                .or_else(|| self.folder_cover.as_deref().and_then(|p| tagedit::load_cover(p).ok()))
+        };
+        let from = if self.values[2].trim().is_empty() { "this song".to_string() } else { self.values[2].trim().to_string() };
+        TagClip { fields: CLIP_FIELDS.iter().map(|&i| (i, self.values[i].trim().to_string())).collect(), cover, from }
     }
     fn cover_path(&self) -> Option<std::path::PathBuf> {
         let v = self.cover.trim();
@@ -978,6 +1006,31 @@ impl Dialog {
                     } else {
                         format!("Filled {n} from the file name · check, then enter to save")
                     });
+                } else if ctrl && k.code == KeyCode::Char('c') {
+                    let clip = e.clip();
+                    let cover = if clip.cover.is_some() { " and the cover" } else { "" };
+                    e.note = Some(format!("Copied the album tags{cover} of \"{}\" · ctrl+v pastes them into another song", clip.from));
+                    app.tag_clip = Some(clip);
+                } else if ctrl && k.code == KeyCode::Char('v') {
+                    e.note = Some(match &app.tag_clip {
+                        None => "Nothing copied yet: open another song or album, ctrl+c there".into(),
+                        Some(clip) => {
+                            let rows = e.rows();
+                            for (i, v) in &clip.fields {
+                                // An empty copied field leaves the song's own value alone.
+                                if rows.contains(i) && !v.is_empty() && e.values[*i] != *v {
+                                    e.values[*i] = v.clone();
+                                    e.touched[*i] = true;
+                                }
+                            }
+                            if let Some(b) = &clip.cover {
+                                e.cover.clear();
+                                e.cover_remove = false;
+                                e.cover_data = Some((b.clone(), format!("from \"{}\"", clip.from)));
+                            }
+                            format!("Pasted the album tags of \"{}\" · check, then enter to save", clip.from)
+                        }
+                    });
                 } else if ctrl && k.code == KeyCode::Char('b') {
                     let artist = if e.values[3].trim().is_empty() { e.values[1].clone() } else { e.values[3].clone() };
                     e.busy = true;
@@ -1221,7 +1274,7 @@ impl Dialog {
                     if on_cover {
                         "type a picture path (~ ok) · ctrl+x remove · enter save · esc cancel".into()
                     } else {
-                        "←/→ move · enter save · ctrl+f from file name · ctrl+b MusicBrainz · esc cancel".into()
+                        "enter save · ctrl+c/v copy/paste album · ctrl+f file name · ctrl+b MusicBrainz · esc".into()
                     }
                 });
                 hints_row(b, inner, &hint, muted);

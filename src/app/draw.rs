@@ -469,10 +469,10 @@ fn row(buf: &mut Buffer, t: &Theme, r: Rect, it: &Item, sel: bool, focused: bool
 
 fn album_grid(f: &mut Frame, app: &mut App, inner: Rect) {
     let t = app.theme.clone();
-    let cell_w: u16 = 24;
-    let cover_h: u16 = 10;
+    let (cols, cell_w) = grid_columns(inner.width);
+    // Covers keep their shape: 22 columns wide is 10 rows tall.
+    let cover_h = ((cell_w - 2) * 10).div_ceil(22).max(1);
     let cell_h = cover_h + 3;
-    let cols = (inner.width / cell_w).max(1) as usize;
     let rows = (inner.height / cell_h).max(1) as usize;
     app.hit.grid_cols = cols;
     app.hit.page = rows;
@@ -511,6 +511,16 @@ fn album_grid(f: &mut Frame, app: &mut App, inner: Rect) {
         put(buf, x + 2, y + cover_h, &n.title, cell_w - 3, if sel { st.add_modifier(Modifier::BOLD) } else { st });
         put(buf, x + 2, y + cover_h + 1, &n.subtitle, cell_w - 3, Style::default().bg(c(bg)).fg(c(t.muted)));
     }
+}
+
+/// Columns and tile width for the album grid: about 24 columns per tile, stretched so
+/// the tiles fill the whole width, never narrower than 20.
+fn grid_columns(width: u16) -> (usize, u16) {
+    let mut cols = ((width as f32 / 24.0).round() as u16).max(1);
+    while cols > 1 && width / cols < 20 {
+        cols -= 1;
+    }
+    (cols as usize, (width / cols).max(4))
 }
 
 /// Draw cover art in `area` or a themed placeholder (♪ on a soft tile).
@@ -1300,6 +1310,21 @@ fn mini(f: &mut Frame, app: &mut App, area: Rect) {
             if let Some(a) = act {
                 super::clicks::add(Rect { x: x0, y: inner.y + 2, width: (cx - x0).max(2), height: 1 }, super::clicks::Click::Act(*a));
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    #[test]
+    fn grid_tiles_fill_the_width() {
+        assert_eq!(super::grid_columns(95), (4, 23), "just under 4×24 still gets 4 tiles");
+        assert_eq!(super::grid_columns(100), (4, 25));
+        assert_eq!(super::grid_columns(110), (5, 22));
+        assert_eq!(super::grid_columns(30), (1, 30));
+        for w in 20..300 {
+            let (cols, cell) = super::grid_columns(w);
+            assert!(cell >= 20 && cols as u16 * cell <= w, "width {w}: {cols}×{cell}");
         }
     }
 }

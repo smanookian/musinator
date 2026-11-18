@@ -199,6 +199,8 @@ pub struct App {
     pub update: Option<crate::update::Release>,
     /// After quitting, start this program file (the freshly installed version).
     pub restart: Option<std::path::PathBuf>,
+    /// Album tags copied in the tag editor (ctrl+c).
+    pub tag_clip: Option<dialogs::TagClip>,
     pub lyrics: Option<(TrackRef, Lyrics)>,
     pub viz: viz::Viz,
     pub status: Option<(String, bool, Instant)>,
@@ -2086,6 +2088,7 @@ pub fn run(cfg: Config) -> Result<()> {
         notify_waits_art: None,
         update: None,
         restart: None,
+        tag_clip: None,
         lyrics: None,
         viz: viz::Viz::new(),
         status: None,
