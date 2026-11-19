@@ -1,5 +1,5 @@
-//! Control socket: `musinator play|pause|toggle|next|prev|stop|status [--json]`
-//! and `musinator --bar` talk to the running app over
+//! Control socket: `musinator play|pause|toggle|next|prev|stop|status [--json]`,
+//! `musinator <files or folders>` and `musinator --bar` talk to the running app over
 //! `$XDG_RUNTIME_DIR/musinator.sock` (one JSON line each way).
 
 use std::io::{BufRead, BufReader, Write};
@@ -16,6 +16,8 @@ use crate::model::{fmt_time, khz};
 
 pub struct Request {
     pub cmd: String,
+    /// Files and folders for "open".
+    pub paths: Vec<PathBuf>,
     pub reply: cb::Sender<Value>,
 }
 
@@ -42,9 +44,12 @@ pub fn serve() -> Result<cb::Receiver<Request>> {
                 if BufReader::new(&conn).read_line(&mut line).is_err() {
                     return;
                 }
-                let cmd = serde_json::from_str::<Value>(&line).ok().and_then(|v| v["cmd"].as_str().map(str::to_string)).unwrap_or_default();
+                let v = serde_json::from_str::<Value>(&line).unwrap_or_default();
+                let cmd = v["cmd"].as_str().unwrap_or_default().to_string();
+                let paths =
+                    v["paths"].as_array().map(|a| a.iter().filter_map(|p| p.as_str().map(PathBuf::from)).collect()).unwrap_or_default();
                 let (rtx, rrx) = cb::bounded(1);
-                if tx.send(Request { cmd, reply: rtx }).is_err() {
+                if tx.send(Request { cmd, paths, reply: rtx }).is_err() {
                     return;
                 }
                 if let Ok(v) = rrx.recv_timeout(Duration::from_secs(2)) {
@@ -63,9 +68,18 @@ pub fn cleanup() {
 
 /// Send one command to the running app.
 pub fn call(cmd: &str) -> Result<Value> {
+    send(json!({ "cmd": cmd }))
+}
+
+/// Ask the running app to play these files and folders.
+pub fn open(paths: &[PathBuf]) -> Result<Value> {
+    send(json!({ "cmd": "open", "paths": paths }))
+}
+
+fn send(msg: Value) -> Result<Value> {
     let mut s = UnixStream::connect(socket_path()).map_err(|_| anyhow::anyhow!("Musinator is not running"))?;
     s.set_read_timeout(Some(Duration::from_secs(3)))?;
-    writeln!(s, "{}", json!({ "cmd": cmd }))?;
+    writeln!(s, "{msg}")?;
     let mut line = String::new();
     BufReader::new(&s).read_line(&mut line)?;
     if line.trim().is_empty() {

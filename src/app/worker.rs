@@ -131,6 +131,8 @@ pub enum Job {
     },
     /// Resolve saved queue paths back to tracks (resume).
     Restore(crate::app::session::Session),
+    /// Play these files and folders (from the command line or the file manager).
+    Open(Vec<std::path::PathBuf>),
     Like(TrackRef),
     Playlists,
     NewPlaylist {
@@ -550,6 +552,27 @@ fn run(srcs: &Srcs, job: Job, out: &cb::Sender<Msg>) {
             if let Err(e) = db::set_lyrics_offset(&local.conn(), &track.source, &track.id, ms) {
                 send(err(e));
             }
+        }
+        Job::Open(paths) => {
+            let src = local.id().clone();
+            let files = crate::app::open_files(&paths);
+            if files.is_empty() {
+                send(Msg::Error("No music files in what you opened".into()));
+                return;
+            }
+            let from = paths
+                .first()
+                .map(|p| if p.is_dir() { p.as_path() } else { p.parent().unwrap_or(p) })
+                .and_then(|p| p.file_name())
+                .map_or_else(|| "Opened files".into(), |n| n.to_string_lossy().into_owned());
+            let tracks = files
+                .into_iter()
+                .map(|f| {
+                    let r = TrackRef { source: src.clone(), id: f.to_string_lossy().into_owned() };
+                    Arc::new(local.track(&r).unwrap_or_else(|_| Track { r: Some(r), ..Default::default() }))
+                })
+                .collect();
+            send(Msg::Tracks { tracks, then: Then::Play { from } });
         }
         Job::Restore(session) => {
             let src = local.id().clone();

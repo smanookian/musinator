@@ -1738,6 +1738,10 @@ impl App {
                 self.engine.send(Cmd::Prev);
                 None
             }
+            "open" => {
+                self.worker.send(Job::Open(req.paths.clone()));
+                None
+            }
             "stop" => {
                 self.engine.send(Cmd::Stop);
                 None
@@ -1972,7 +1976,7 @@ fn stopped(what: &str) -> anyhow::Error {
     anyhow::anyhow!("internal error: the {what} part stopped")
 }
 
-pub fn run(cfg: Config) -> Result<()> {
+pub fn run(cfg: Config, open: Vec<std::path::PathBuf>) -> Result<()> {
     let (lib_tx, lib_rx) = cb::unbounded();
     let lib = Library::new(crate::config::data_dir().join("library.db"), cfg.folders(), lib_tx);
     lib.measure_loudness.store(cfg.measure_loudness, std::sync::atomic::Ordering::Relaxed);
@@ -2133,7 +2137,9 @@ pub fn run(cfg: Config) -> Result<()> {
         lib.watch();
     }
     crate::bar::sync(app.cfg.omarchy_bar);
-    if app.cfg.resume
+    if !open.is_empty() {
+        app.worker.send(Job::Open(open));
+    } else if app.cfg.resume
         && let Some(s) = session::load()
     {
         app.worker.send(Job::Restore(s));
@@ -2199,6 +2205,27 @@ pub fn run(cfg: Config) -> Result<()> {
         anyhow::bail!("could not start the new version ({e}): start Musinator again");
     }
     Ok(())
+}
+
+/// The audio files in `paths`: files as given, folders searched (sorted by path).
+pub fn open_files(paths: &[std::path::PathBuf]) -> Vec<std::path::PathBuf> {
+    use crate::library::tags::is_audio;
+    let mut out = Vec::new();
+    for p in paths {
+        if p.is_dir() {
+            let mut found: Vec<_> = walkdir::WalkDir::new(p)
+                .into_iter()
+                .flatten()
+                .filter(|e| e.file_type().is_file() && is_audio(e.path()))
+                .map(|e| e.into_path())
+                .collect();
+            found.sort();
+            out.extend(found);
+        } else if p.is_file() && is_audio(p) {
+            out.push(p.clone());
+        }
+    }
+    out
 }
 
 /// Konsole 26.08 (KONSOLE_VERSION 260800) and newer draw Kitty pictures, tested by a user.

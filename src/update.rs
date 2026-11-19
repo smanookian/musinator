@@ -219,6 +219,8 @@ fn refresh_desktop_files(tmp: &Path) {
             let _ = std::fs::copy(tmp.join(file), dest);
         }
     }
+    // File managers learn the audio types Musinator opens.
+    let _ = Command::new("update-desktop-database").arg(share.join("applications")).status();
 }
 
 // ---------------- when to check ----------------

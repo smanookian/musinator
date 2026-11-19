@@ -257,7 +257,10 @@ impl Source for LocalSource {
 
     fn track(&self, r: &TrackRef) -> Result<Track> {
         let c = self.conn.lock();
-        Ok(db::track_by_path(&c, &self.id, &r.id)?.unwrap_or_else(|| Track { r: Some(r.clone()), ..Default::default() }))
+        let found = db::track_by_path(&c, &self.id, &r.id)?;
+        drop(c);
+        // A file outside the music folders (opened from a file manager): read its tags.
+        Ok(found.unwrap_or_else(|| file_track(&self.id, &r.id).unwrap_or_else(|| Track { r: Some(r.clone()), ..Default::default() })))
     }
 
     fn open(&self, r: &TrackRef) -> Result<Box<dyn Stream>> {
@@ -287,4 +290,46 @@ impl Source for LocalSource {
             .or_else(|| std::fs::read_to_string(crate::library::lrclib::cache_file(&r.id)).ok());
         Ok(text.map(|t| lrc::parse(&t)).filter(|l| !l.is_empty()))
     }
+}
+
+/// A track straight from a file's tags (for files the library does not know).
+fn file_track(src: &SourceId, path: &str) -> Option<Track> {
+    use crate::model::{AudioFormat, Gain, GainOrigin};
+    let p = Path::new(path);
+    let t = tags::read(p, 0, 0).ok()?;
+    let art = if t.embedded_art {
+        Some(format!("embedded:{path}"))
+    } else {
+        p.parent().and_then(crate::library::folder_cover).map(|c| format!("file:{}", c.display()))
+    };
+    let has_gain = t.rg_track.is_some() || t.rg_album.is_some();
+    Some(Track {
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        album_artist: t.album_artist,
+        year: t.year,
+        track_no: t.track_no,
+        track_total: t.track_total,
+        disc_no: t.disc_no,
+        duration_ms: Some(t.duration_ms),
+        format: Some(AudioFormat {
+            codec: t.codec,
+            sample_rate: t.sample_rate,
+            bits: t.bits,
+            channels: t.channels,
+            bitrate_kbps: t.bitrate,
+        }),
+        gain: Gain {
+            track_db: t.rg_track,
+            track_peak: t.rg_track_peak,
+            album_db: t.rg_album,
+            album_peak: t.rg_album_peak,
+            origin: if has_gain { GainOrigin::Tags } else { GainOrigin::None },
+        },
+        art: art.map(|id| ArtRef { source: src.clone(), id }),
+        rating: None,
+        on_air: false,
+        r: Some(TrackRef { source: src.clone(), id: path.to_string() }),
+    })
 }

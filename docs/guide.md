@@ -790,10 +790,13 @@ with the title, artist, album and cover when a new song starts.
 
 ## Command line
 
+**Open with Musinator:** Musinator is listed for audio files (FLAC, MP3, AAC/M4A, Ogg, Opus, WAV, AIFF), so a file manager can open them with it. Pick it under "Open with", or make it the default app for those types. If Musinator is already open, the song plays there; the queue becomes the opened files. A folder plays all its songs, sorted by path.
+
 These talk to the running app.
 
 ```sh
 musinator                 # open the player
+musinator song.flac       # play files or folders (in the open player, if one runs)
 musinator play            # resume playing
 musinator pause           # pause
 musinator toggle          # play / pause

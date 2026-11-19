@@ -2,6 +2,13 @@
 
 The section for a version becomes its release notes on GitHub and in the update window (`U`).
 
+## 0.1.12
+
+### New
+
+- Open songs and folders: `musinator song.flac` or `musinator ~/Music/Album`. If Musinator is already running, they play there.
+- File managers can open audio files with Musinator ("Open with", or as the default app). Files outside your music folders show their tags too.
+
 ## 0.1.11
 
 ### New

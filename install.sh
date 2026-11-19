@@ -60,6 +60,8 @@ fi
 mkdir -p "$BIN_DIR" "$APP_DIR"
 install -m 755 "$TMP/musinator" "$BIN_DIR/musinator"
 [ -f "$DESKTOP" ] && install -m 644 "$DESKTOP" "$APP_DIR/musinator.desktop"
+# Lets file managers offer "Open with Musinator" for audio files.
+command -v update-desktop-database >/dev/null && update-desktop-database "$APP_DIR" 2>/dev/null || true
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 if [ -f "$ICON" ]; then mkdir -p "$ICON_DIR" && install -m 644 "$ICON" "$ICON_DIR/musinator.svg"; fi
 
