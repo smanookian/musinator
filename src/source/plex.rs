@@ -419,7 +419,8 @@ impl Source for PlexSource {
         // The original file (no re-encoding), with seeking.
         let l = &self.login;
         let sep = if part.contains('?') { '&' } else { '?' };
-        let url = format!("{}{part}{sep}X-Plex-Token={}", l.url, l.token);
+        // Without download=1 some servers answer 500 for part files (seen on PMS 1.43 behind Cloudflare).
+        let url = format!("{}{part}{sep}download=1&X-Plex-Token={}", l.url, l.token);
         let src = HttpFile::open(&url)?;
         if src.content_type.contains("json") || src.content_type.contains("html") || src.content_type.contains("xml") {
             bail!("the server can't send this song ({}): is its file still in the server's library?", src.content_type);
