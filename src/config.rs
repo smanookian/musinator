@@ -321,7 +321,7 @@ pub const SETTINGS: &[Setting] = &[
     ),
     s!("mpris", "Desktop", "Media keys (MPRIS)", "Media keys, playerctl and the Omarchy media controls.", Kind::Toggle),
     s!("notifications", "Desktop", "Notify on track change", "Desktop notification when a new song starts.", Kind::Toggle),
-    s!("servers", "Library", "Music servers", "Navidrome, Jellyfin or other Subsonic servers. Add as many as you like.", Kind::Open),
+    s!("servers", "Library", "Music servers", "Navidrome, Jellyfin, Plex or other Subsonic servers. Add as many as you like.", Kind::Open),
     s!(
         "podcast_auto_download",
         "Library",

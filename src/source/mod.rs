@@ -9,6 +9,7 @@
 
 pub mod jellyfin;
 pub mod local;
+pub mod plex;
 pub mod podcast;
 pub mod radio;
 pub mod servers;

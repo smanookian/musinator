@@ -1,4 +1,4 @@
-//! The music servers the user added (Navidrome/Subsonic or Jellyfin, any number).
+//! The music servers the user added (Navidrome/Subsonic, Jellyfin or Plex, any number).
 //! Kept in `~/.config/musinator/servers.json` (logins as tokens, never passwords).
 //! Each server is its own source with an id like "srv1"; its lists are "srv1:albums".
 
@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 use super::jellyfin::{self, JellyfinSource};
+use super::plex::{self, PlexSource};
 use super::subsonic::{self, SubsonicSource};
 use super::{Item, Source, Sources};
 
@@ -21,11 +22,14 @@ struct Saved {
     subsonic: Option<subsonic::Login>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     jellyfin: Option<jellyfin::Login>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    plex: Option<plex::Login>,
 }
 
 pub enum Kind {
     Subsonic(Arc<SubsonicSource>),
     Jellyfin(Arc<JellyfinSource>),
+    Plex(Arc<PlexSource>),
 }
 
 pub struct Server {
@@ -37,9 +41,10 @@ pub struct Server {
 
 impl Server {
     fn from_saved(s: Saved) -> Option<Self> {
-        let kind = match (&s.subsonic, &s.jellyfin) {
-            (Some(l), _) => Kind::Subsonic(Arc::new(SubsonicSource::new(&s.id, l.clone()))),
-            (_, Some(l)) => Kind::Jellyfin(Arc::new(JellyfinSource::new(&s.id, l.clone()))),
+        let kind = match (&s.subsonic, &s.jellyfin, &s.plex) {
+            (Some(l), _, _) => Kind::Subsonic(Arc::new(SubsonicSource::new(&s.id, l.clone()))),
+            (_, Some(l), _) => Kind::Jellyfin(Arc::new(JellyfinSource::new(&s.id, l.clone()))),
+            (_, _, Some(l)) => Kind::Plex(Arc::new(PlexSource::new(&s.id, l.clone()))),
             _ => return None,
         };
         Some(Self { id: s.id.clone(), name: s.name.clone(), kind, saved: s })
@@ -49,6 +54,7 @@ impl Server {
         match &self.kind {
             Kind::Subsonic(s) => s.clone(),
             Kind::Jellyfin(s) => s.clone(),
+            Kind::Plex(s) => s.clone(),
         }
     }
 
@@ -56,14 +62,16 @@ impl Server {
         match self.kind {
             Kind::Subsonic(_) => "Navidrome / Subsonic",
             Kind::Jellyfin(_) => "Jellyfin",
+            Kind::Plex(_) => "Plex",
         }
     }
 
     /// "you@host".
     pub fn label(&self) -> String {
-        match (&self.saved.subsonic, &self.saved.jellyfin) {
-            (Some(l), _) => l.label(),
-            (_, Some(l)) => l.label(),
+        match (&self.saved.subsonic, &self.saved.jellyfin, &self.saved.plex) {
+            (Some(l), _, _) => l.label(),
+            (_, Some(l), _) => l.label(),
+            (_, _, Some(l)) => l.label(),
             _ => String::new(),
         }
     }
@@ -80,6 +88,7 @@ impl Server {
         match &self.kind {
             Kind::Subsonic(s) => s.find(q),
             Kind::Jellyfin(s) => s.find(q),
+            Kind::Plex(s) => s.find(q),
         }
     }
 
@@ -87,6 +96,7 @@ impl Server {
         match &self.kind {
             Kind::Subsonic(s) => s.scrobble(id),
             Kind::Jellyfin(s) => s.scrobble(id),
+            Kind::Plex(s) => s.scrobble(id),
         }
     }
 }
@@ -146,28 +156,35 @@ impl Servers {
     /// Find out what kind of server it is, log in, and add it.
     /// Returns its name and what it is ("Home · Jellyfin 12.4").
     pub fn add(&self, name: &str, url: &str, user: &str, password: &str) -> Result<String> {
-        let (subsonic, jellyfin, version) = if let Some(version) = jellyfin::detect(url) {
-            (None, Some(jellyfin::login(url, user, password)?), version)
+        let (subsonic, jellyfin, plex, version) = if let Some(version) = jellyfin::detect(url) {
+            (None, Some(jellyfin::login(url, user, password)?), None, version)
+        } else if let Some(version) = plex::detect(url) {
+            (None, None, Some(plex::login(url, user, password)?), version)
         } else {
             let l = subsonic::Login::new(url, user, password);
             let version = subsonic::ping(&l).map_err(|e| {
                 let s = e.to_string();
                 if s.contains("not a Subsonic") || s.contains("not found at this address") {
-                    anyhow::anyhow!("no Navidrome, Subsonic or Jellyfin server found at this address")
+                    anyhow::anyhow!("no Navidrome, Subsonic, Jellyfin or Plex server found at this address")
                 } else {
                     e
                 }
             })?;
-            (Some(l), None, version)
+            (Some(l), None, None, version)
         };
-        let host = subsonic.as_ref().map(|l| l.label()).or(jellyfin.as_ref().map(|l| l.label())).unwrap_or_default();
+        let host = subsonic
+            .as_ref()
+            .map(|l| l.label())
+            .or(jellyfin.as_ref().map(|l| l.label()))
+            .or(plex.as_ref().map(|l| l.label()))
+            .unwrap_or_default();
         let mut list = self.list.write();
         if list.iter().any(|s| s.label() == host) {
             bail!("{host} is already in your list");
         }
         let id = (1..).map(|n| format!("srv{n}")).find(|id| !list.iter().any(|s| &s.id == id)).expect("free id");
         let name = if name.trim().is_empty() { host.split('@').nth(1).unwrap_or(&host).to_string() } else { name.trim().to_string() };
-        let server = Server::from_saved(Saved { id, name: name.clone(), subsonic, jellyfin }).expect("login");
+        let server = Server::from_saved(Saved { id, name: name.clone(), subsonic, jellyfin, plex }).expect("login");
         self.sources.add(server.source());
         list.push(Arc::new(server));
         drop(list);
@@ -209,11 +226,11 @@ fn migrate() -> Vec<Saved> {
     let old_sub = dir.join("server.json");
     let old_jf = dir.join("jellyfin.json");
     if let Some(l) = std::fs::read_to_string(&old_sub).ok().and_then(|t| serde_json::from_str::<subsonic::Login>(&t).ok()) {
-        out.push(Saved { id: "srv1".into(), name: "Music server".into(), subsonic: Some(l), jellyfin: None });
+        out.push(Saved { id: "srv1".into(), name: "Music server".into(), subsonic: Some(l), jellyfin: None, plex: None });
     }
     if let Some(l) = std::fs::read_to_string(&old_jf).ok().and_then(|t| serde_json::from_str::<jellyfin::Login>(&t).ok()) {
         let id = format!("srv{}", out.len() + 1);
-        out.push(Saved { id, name: "Jellyfin".into(), subsonic: None, jellyfin: Some(l) });
+        out.push(Saved { id, name: "Jellyfin".into(), subsonic: None, jellyfin: Some(l), plex: None });
     }
     if !out.is_empty() {
         let tmp = Servers {
