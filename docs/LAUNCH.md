@@ -364,7 +364,7 @@ curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.s
 
 [BUTTON: Read the post → https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal]
 
-If you try it, just reply to this email and tell me what sounds wrong or looks off on your machine. I read every answer.
+If you try it, tell me what sounds wrong or looks off on your machine: open an issue on GitHub [link: https://github.com/smanookian/musinator/issues], or leave a comment under the blog post [link: the post URL] or on Reddit. I read everything.
 
 Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine.
 
