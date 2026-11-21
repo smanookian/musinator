@@ -45,6 +45,7 @@ Step-by-step process for next time: `~/Projects/Stevinator/docs/LAUNCH_PLAYBOOK.
 | X | open: web posting blocked ("looks automated"); try the phone app or another browser |
 | Omarchy Discord | ✓ posted in #omarchy-apps |
 | dev.to, Medium, Substack | ✓ posted |
+| Newsletter (Kit) | open: text in "Newsletter (Kit)" below |
 | LinkedIn | open: story post in "LinkedIn" below, links in the first comment |
 | r/commandline | open: **on or after 2026-11-23**, written by you, flair Terminal User Interface |
 | Mastodon | not used |
@@ -327,6 +328,47 @@ First comment:
 ```
 Musinator (free, open source): https://github.com/smanookian/musinator
 How I built it: https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal
+```
+
+## Newsletter (Kit)
+
+Kit → Send → Broadcasts → New broadcast. Recipients: the main newsletter subscribers. Paste the subject and preview text into their fields, the body into the editor. Put the GIF (`docs/demo/musinator-demo.gif`, 1.8 MB) under the first paragraph. The button goes where it says [BUTTON]. Send a test to yourself first and check it on your phone.
+
+**Subject:**
+```
+Musinator: a music player for the terminal that looks good
+```
+
+**Preview text:**
+```
+Album covers, lyrics in time with the song, 22 themes. Free. Plus what you found in the first week.
+```
+
+**Body:**
+```
+So here is the thing about music in the terminal. The players are fast, but most of them look like 1998.
+
+I live in the terminal on Omarchy, and I wanted my music there too. So I built the player I wanted: Musinator. It's free, open source, and it stays free.
+
+What it does:
+- Real album covers, right in the terminal.
+- Lyrics in time with the song.
+- 22 themes that change live, or one that follows your Omarchy theme.
+- Internet radio, podcasts, and your Navidrome or Jellyfin server, in the same screens and one search.
+- Tag editing, a 10-band equalizer, and the Omarchy media keys.
+
+Then people started using it, and they found what I never would have. A German music folder is called ~/Musik, not ~/Music, and Musinator didn't find it. Someone runs it inside tmux on a media PC, where the covers didn't show. Both are fixed now, along with eleven small updates since the launch. You can also open songs straight from your file manager now.
+
+If you already have it, press U inside Musinator to get the newest version. If not, one line installs it, no sudo:
+curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.sh | sh
+
+[BUTTON: Read the post → https://stevinator.com/blog/programming/musinator-a-music-player-for-the-terminal]
+
+If you try it, just reply to this email and tell me what sounds wrong or looks off on your machine. I read every answer.
+
+Most of the code was written with an AI coding assistant; I designed it, reviewed it and tested it on my machine.
+
+I hope to see you next time. Steve out. Tschau!
 ```
 
 ---
