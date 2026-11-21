@@ -14,11 +14,6 @@ APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 say() { printf '%s\n' "$*"; }
 fail() { say "musinator install: $*" >&2; exit 1; }
 
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64) ARCH=x86_64 ;;
-  *) fail "release builds are Linux x86_64 only; build from a source checkout instead" ;;
-esac
-
 # Runtime needs: PipeWire and libopus.
 missing=""
 for lib in libpipewire-0.3.so.0 libopus.so.0; do
@@ -45,6 +40,12 @@ if [ -n "$HERE" ] && [ -f "$HERE/Cargo.toml" ] && grep -q '^name = "musinator"' 
   DESKTOP="$HERE/packaging/musinator.desktop"
   ICON="$HERE/packaging/musinator.svg"
 else
+  # Release builds exist only for Linux x86_64; anything else builds from a checkout.
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) ARCH=x86_64 ;;
+    *) fail "release builds are Linux x86_64 only; build from a source checkout instead:
+  git clone https://github.com/$REPO && cd musinator && ./install.sh" ;;
+  esac
   URL="https://github.com/$REPO/releases/latest/download/musinator-$ARCH-linux.tar.gz"
   say "Downloading $URL"
   curl -fsSL "$URL" -o "$TMP/m.tar.gz" || fail "download failed: check that you are online"
