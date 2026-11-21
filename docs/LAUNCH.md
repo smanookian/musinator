@@ -357,7 +357,7 @@ What it does:
 - Internet radio, podcasts, and your Navidrome or Jellyfin server, in the same screens and one search.
 - Tag editing, a 10-band equalizer, and the Omarchy media keys.
 
-Then people started using it, and they found what I never would have. A German music folder is called ~/Musik, not ~/Music, and Musinator didn't find it. Someone runs it inside tmux on a media PC, where the covers didn't show. Both are fixed now, along with eleven small updates since the launch. You can also open songs straight from your file manager now.
+Since the launch, Musinator got eleven updates, most of them from your reports. Album covers now also show inside tmux and in KDE's Konsole, you can open songs straight from your file manager, and the tag editor got a lot better.
 
 If you already have it, press U inside Musinator to get the newest version. If not, one line installs it, no sudo:
 curl -fsSL https://raw.githubusercontent.com/smanookian/musinator/main/install.sh | sh
